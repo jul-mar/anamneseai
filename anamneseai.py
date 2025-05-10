@@ -109,7 +109,7 @@ def ChatMessage(message: dict):
     # Get content, defaulting to an empty string if missing
     message_content = message.get("content", "")
 
-    # Professional avatar for medical interface
+    # Professional avatar for medical interface - FIX #1: Added flex items-center justify-center
     avatar_initial = "P" if is_user else "A"
     avatar_bg = "bg-medical-blue-dark text-white" if is_user else "bg-white text-medical-blue-dark border border-medical-blue"
     avatar = Div(
@@ -155,7 +155,7 @@ def ChatInterface(messages: list = None): # <--- Made messages parameter optiona
         cls="p-4 space-y-6 overflow-y-auto h-[calc(100vh-220px)] bg-white rounded-lg shadow-md border border-gray-200"
     )
 
-    # Professional input styling
+    # Professional input styling - FIX #3: Changed input class to preserve styling after submission
     user_input = Input(
         id="user-message-input",
         type="text", name="user_message",
@@ -171,7 +171,7 @@ def ChatInterface(messages: list = None): # <--- Made messages parameter optiona
         cls="bg-medical-blue hover:bg-medical-blue-dark text-white font-medium py-2 px-6 rounded-lg transition-colors duration-200",
     )
 
-    # Professional loading indicator
+    # Professional loading indicator - FIX #2: Fixed htmx-indicator class
     loading_indicator = Div(
         id="loading-indicator", 
         cls="htmx-indicator flex items-center text-medical-blue ml-2",
@@ -191,6 +191,7 @@ def ChatInterface(messages: list = None): # <--- Made messages parameter optiona
         hx_post="/chat",
         hx_target="#chat-box",
         hx_swap="beforeend",
+        hx_indicator="#loading-indicator",  # FIX #2: Added indicator reference
         hx_on_htmx_after_on_load="this.closest('.container').querySelector('#chat-box').scrollTop = this.closest('.container').querySelector('#chat-box').scrollHeight",
         cls="p-4 flex items-center bg-gray-50 rounded-lg shadow-sm mt-4 sticky bottom-0 border border-gray-200", 
     )
@@ -247,14 +248,20 @@ async def get_chat_ui(session):
     """Serves the main chat page, loading history from session."""
     # Always create a new session ID and clear any existing chat messages
     session['session_id'] = str(uuid.uuid4())
-    session['chat_messages'] = []  # Start with an empty chat history
-
-    # Pass the empty chat history to the ChatInterface component
+    
+    # FIX #4: Add welcome message to chat history in session
+    welcome_msg = {
+        "id": "welcome-msg",
+        "role": "assistant",
+        "content": "Welcome to AnamneseAI. I'm a Chatbot that asks the patient questions while he is waiting for the appointment. The doctor can specify how the questions have to be answered and i will rephrase questions or ask again until i get sufficent answers. The doctor then gets a summary before seeing the patient. Here is an example question: How much do you smoke?"
+    }
+    session['chat_messages'] = [welcome_msg]  # Initialize with welcome message
+    
     return (
-        Title("MedAssist AI - Professional Medical Assistant"),
+        Title("AnamneseAI - Professional Medical Assistant"),
         # Add favicon and meta tags appropriate for a medical application
         Link(rel="icon", href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚕️</text></svg>"),
-        Meta(name="description", content="Professional AI assistant for medical professionals"),
+        Meta(name="description", content="Professional AI assistant for taking a patients history"),
         # Add viewport meta for better mobile experience
         Meta(name="viewport", content="width=device-width, initial-scale=1.0"),
         # Add professional medical-themed styling to the body
@@ -279,7 +286,7 @@ async def get_chat_ui(session):
                 background: #94a3b8;
             }
         """),
-        ChatInterface([])
+        ChatInterface(session['chat_messages'])  # FIX #4: Pass the messages from session
     )
 
 
@@ -287,11 +294,12 @@ async def get_chat_ui(session):
 async def post_chat_message(user_message: str, session):
     """Handles incoming user messages, gets AI response, and updates chat via HTMX."""
     # Component to clear the input field after submission
+    # FIX #3: Preserve input styling
     clear_input_component = Input(
         id="user-message-input",
         name="user_message",
-        placeholder="Type your message...",
-        cls="input input-bordered w-full flex-grow mr-2",
+        placeholder="Type your medical query...",
+        cls="input bg-white border border-gray-300 focus:border-medical-blue focus:ring-2 focus:ring-medical-blue-light w-full flex-grow mr-2 rounded-lg",
         hx_swap_oob="true", # Swap outerHTML of the element with this ID
         value="", # Set value to empty
         autofocus=True # Re-focus the input field
