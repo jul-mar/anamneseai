@@ -109,11 +109,14 @@ def ChatMessage(message: dict):
     # Get content, defaulting to an empty string if missing
     message_content = message.get("content", "")
 
-    # Professional avatar for medical interface - FIX #1: Added flex items-center justify-center
+    # Professional avatar for medical interface - FIX #1: Enhanced centering for avatar initials
     avatar_initial = "P" if is_user else "A"
     avatar_bg = "bg-medical-blue-dark text-white" if is_user else "bg-white text-medical-blue-dark border border-medical-blue"
     avatar = Div(
-        Div(avatar_initial, cls=f"w-8 h-8 rounded-full {avatar_bg} flex items-center justify-center text-sm font-semibold shadow-sm"),
+        Div(
+            Span(avatar_initial, cls="inline-flex items-center justify-center w-full h-full"), 
+            cls=f"w-8 h-8 rounded-full {avatar_bg} flex items-center justify-center text-sm font-semibold shadow-sm"
+        ),
         cls="chat-image avatar"
     )
 
