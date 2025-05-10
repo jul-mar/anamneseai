@@ -10,11 +10,31 @@ import shutil # For removing session directory
 OLLAMA_HOST = "http://localhost:11434" # Default Ollama API endpoint
 MODEL_NAME = "gemma3:4b-it-qat" # Target model - using 2b-it as it's common and smaller
 
+# --- Define System Prompt ---
+SYSTEM_PROMPT = """You are AnamneseAI, a medical assistant chatbot designed to gather patient information while they wait for their appointment.
+
+Your role is to:
+1. Ask relevant questions about the patient's symptoms, medical history, and concerns
+2. Gather complete information by asking follow-up questions when answers are insufficient
+3. Be professional, empathetic, and respectful at all times
+4. Follow specific questioning patterns requested by the doctor
+5. Create a comprehensive but concise summary of the patient's history when requested
+
+Remember:
+- Be clear and precise in your questions
+- Don't make medical diagnoses or recommendations
+- Maintain a friendly, reassuring tone
+- Respect patient privacy and be sensitive to personal health issues
+- Ask one question at a time to avoid overwhelming the patient
+"""
+
 # --- Application Setup ---
 # Note: For persistent sessions in production, you might need a more robust backend
 # store than the default in-memory cookie storage, but for development, this is fine.
 hdrs = (
     Script(src="https://cdn.tailwindcss.com"),
+    Script(src="https://unpkg.com/htmx.org@1.9.10"),
+    Script(src="https://unpkg.com/htmx.org@1.9.10/dist/ext/loading-states.js"),
     Link(rel="stylesheet", href="https://cdn.jsdelivr.net/npm/daisyui@4.10.1/dist/full.min.css"),
     # Custom styles with medical theme and custom color configuration
     Script("""
@@ -29,6 +49,14 @@ hdrs = (
         }
       }
     }
+    """, type="text/javascript"),
+    # Initialize HTMX extensions
+    Script("""
+    document.addEventListener('DOMContentLoaded', function() {
+        htmx.config.useTemplateFragments = true;
+        htmx.config.indicatorClass = 'htmx-indicator';
+        htmx.config.requestClass = 'htmx-request';
+    });
     """, type="text/javascript"),
 )
 
@@ -174,17 +202,21 @@ def ChatInterface(messages: list = None): # <--- Made messages parameter optiona
         cls="bg-medical-blue hover:bg-medical-blue-dark text-white font-medium py-2 px-6 rounded-lg transition-colors duration-200",
     )
 
-    # Professional loading indicator - FIX #2: Fixed htmx-indicator class
+    # Professional loading indicator - FIX #2: Properly implemented htmx indicator
     loading_indicator = Div(
+        Div(
+            _innerHTML="""
+            <svg class="animate-spin h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            """,
+            cls="inline-block"
+        ),
+        Span("Processing...", cls="text-sm font-medium"),
         id="loading-indicator", 
         cls="htmx-indicator flex items-center text-medical-blue ml-2",
-        _innerHTML="""
-        <svg class="animate-spin h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-        </svg>
-        <span class="text-sm font-medium">Processing...</span>
-        """
+        style="opacity: 0; transition: opacity 200ms ease-in;"
     )
 
     chat_form = Form(
@@ -195,6 +227,11 @@ def ChatInterface(messages: list = None): # <--- Made messages parameter optiona
         hx_target="#chat-box",
         hx_swap="beforeend",
         hx_indicator="#loading-indicator",  # FIX #2: Added indicator reference
+        hx_ext="loading-states",  # Added extension for better loading states
+        data_loading_delay="100",  # Small delay before showing the indicator
+        data_loading_class="processing",
+        data_loading_target="#loading-indicator",
+        data_loading_class_remove="opacity-0",
         hx_on_htmx_after_on_load="this.closest('.container').querySelector('#chat-box').scrollTop = this.closest('.container').querySelector('#chat-box').scrollHeight",
         cls="p-4 flex items-center bg-gray-50 rounded-lg shadow-sm mt-4 sticky bottom-0 border border-gray-200", 
     )
@@ -288,6 +325,17 @@ async def get_chat_ui(session):
             ::-webkit-scrollbar-thumb:hover {
                 background: #94a3b8;
             }
+            /* Loading indicator animation styles */
+            #loading-indicator {
+                opacity: 0;
+                transition: opacity 200ms ease-in;
+            }
+            #loading-indicator.processing {
+                opacity: 1 !important;
+            }
+            .htmx-request .htmx-indicator {
+                opacity: 1 !important;
+            }
         """),
         ChatInterface(session['chat_messages'])  # FIX #4: Pass the messages from session
     )
@@ -323,8 +371,13 @@ async def post_chat_message(user_message: str, session):
     session_chat_messages.append(user_msg_data)
 
     # Prepare history for Ollama API call (only include role and content)
-    # This now uses the session-specific chat_messages list
-    ollama_history = [{"role": msg["role"], "content": msg["content"]} for msg in session_chat_messages]
+    # Include the system message at the beginning
+    ollama_history = [{"role": "system", "content": SYSTEM_PROMPT}]
+    
+    # Add all the conversation messages (excluding the system message if it exists)
+    for msg in session_chat_messages:
+        if msg["role"] != "system":  # Skip any existing system messages
+            ollama_history.append({"role": msg["role"], "content": msg["content"]})
 
     # Component for the user's new message to be inserted into the chat box
     user_message_component = ChatMessage(user_msg_data)
@@ -378,11 +431,15 @@ if __name__ == "__main__":
     print(f"Starting FastHTML Ollama Chatbot...")
     print(f"Attempting to use Ollama model: {MODEL_NAME} via {OLLAMA_HOST}")
     print(f"Actual model configured for use: {ACTUAL_MODEL_NAME_USED}")
+    print(f"System prompt configured with {len(SYSTEM_PROMPT)} characters")
     
     print(f"Ollama client initialized using model: {ACTUAL_MODEL_NAME_USED}")
     
     # Clean up any existing session data before starting
     clean_session_data()
+    
+    # Add HTMX specific extension for indicators and loading states
+    print("Adding FastHTML middleware for HTMX extensions...")
     
     # Using FastHTML's built-in serve function
     # This includes basic SessionMiddleware by default
