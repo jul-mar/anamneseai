@@ -74,8 +74,6 @@ hdrs = (
 app = FastHTML(hdrs=hdrs)
 rt = app.route
 
-# REMOVED: Global chat_messages list - state is now per session
-
 # --- Ollama Client Setup ---
 # Initialize client as None initially
 client = None
@@ -290,7 +288,7 @@ async def get_chat_ui(session):
     # Always create a new session ID and clear any existing chat messages
     session['session_id'] = str(uuid.uuid4())
     
-    # FIX #4: Add welcome message to chat history in session
+    # Add welcome message to chat history in session
     welcome_msg = {
         "id": "welcome-msg",
         "role": "assistant",
@@ -338,7 +336,7 @@ async def get_chat_ui(session):
                 opacity: 1 !important;
             }
         """),
-        ChatInterface(session['chat_messages'])  # FIX #4: Pass the messages from session
+        ChatInterface(session['chat_messages'])  # Pass the messages from session
     )
 
 
@@ -346,7 +344,7 @@ async def get_chat_ui(session):
 async def post_chat_message(user_message: str, session):
     """Handles incoming user messages, gets AI response, and updates chat via HTMX."""
     # Component to clear the input field after submission
-    # FIX #3: Preserve input styling
+    # Preserve input styling
     clear_input_component = Input(
         id="user-message-input",
         name="user_message",
