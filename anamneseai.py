@@ -174,7 +174,7 @@ def ChatInterface(messages: list = None): # <--- Made messages parameter optiona
         welcome_msg = {
             "id": "welcome-msg",
             "role": "assistant",
-            "content": "Welcome to AnamneseAI. I'm a Chatbot that asks the patient questions while he is waiting for the appointment. The doctor can specify how the questions have to be answered and i will rephrase questions or ask again until i get sufficent answers. The doctor then gets a summary before seeing the patient. Here is an example question: How much do you smoke?"
+            "content": "Welcome to AnamneseAI. I'm a Chatbot that asks the patient questions while he is waiting for the appointment. The doctor can specify how the questions have to be answered and i will rephrase questions or ask again until i get sufficient answers. The doctor then gets a summary before seeing the patient. Here is an example question: How much do you smoke?"
         }
         messages = [welcome_msg]
         
@@ -292,7 +292,7 @@ async def get_chat_ui(session):
     welcome_msg = {
         "id": "welcome-msg",
         "role": "assistant",
-        "content": "Welcome to AnamneseAI. I'm a Chatbot that asks the patient questions while he is waiting for the appointment. The doctor can specify how the questions have to be answered and i will rephrase questions or ask again until i get sufficent answers. The doctor then gets a summary before seeing the patient. Here is an example question: How much do you smoke?"
+        "content": "Welcome to AnamneseAI. I'm a Chatbot that asks the patient questions while he is waiting for the appointment. The doctor can specify how the questions have to be answered and i will rephrase questions or ask again until i get sufficient answers. The doctor then gets a summary before seeing the patient. Here is an example question: How much do you smoke?"
     }
     session['chat_messages'] = [welcome_msg]  # Initialize with welcome message
     
