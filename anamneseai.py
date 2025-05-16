@@ -26,7 +26,7 @@ Remember:
 - Don't make medical diagnoses or recommendations
 - Maintain a friendly, reassuring tone
 - Respect patient privacy and be sensitive to personal health issues
-- Ask one question at a time to avoid overwhelming the patient
+- DON'T ask multiple questions at once. Ask one question and then wait for the answer before asking another question to avoid overwhelming the patient
 """
 
 # --- Application Setup ---
