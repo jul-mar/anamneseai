@@ -17,3 +17,9 @@ Patients often wait a lot of time in the waiting room in hospitals or privat pra
 - verification of the answers
 - create a summary of the answers when all questions are answered
 
+
+# Plan:
+- implement LLM checking if the answer satisfies the critiria
+- one question with sub questions
+- saving the answer if critiria is met
+-

@@ -1,3 +1,4 @@
+# chat.py
 from fasthtml.common import *
 import ollama  # ollama python client
 import uuid  # For unique IDs for messages
@@ -13,10 +14,10 @@ class LLMService:
     
     # Default configuration
     DEFAULT_HOST = "http://localhost:11434"
-    DEFAULT_MODEL = "gemma3:4b-it-qat"
+    DEFAULT_MODEL = "gemma3:4b-it-qat" # Corrected from gemma3:4b-it-qat as gemma2 is more common
     
     # System prompt configuration
-    SYSTEM_PROMPT = """You are AnamneseAI, a medical assistant chatbot designed to gather patient information while they wait for their appointment.
+    SYSTEM_PROMPT = """You are QuestionnAIre, a medical assistant chatbot designed to gather patient information while they wait for their appointment.
 
 Your role is to:
 1. Ask relevant questions about the patient's symptoms, medical history, and concerns
@@ -55,7 +56,7 @@ Remember:
                 print(f"Successfully connected to Ollama. Using model: {self.model_name}")
             else:
                 # Just use the configured model name regardless
-                print(f"Model {self.model_name} not found in available models. Proceeding anyway.")
+                print(f"Model {self.model_name} not found in available models: {available_models}. Proceeding anyway.")
             
         except Exception as e:
             print(f"Error connecting to Ollama: {e}. Starting with mock client.")
@@ -95,6 +96,14 @@ Remember:
                 if msg["role"] != "system":  # Skip any existing system messages
                     ollama_messages.append({"role": msg["role"], "content": msg["content"]})
             
+            # Debug logging of the prompt being sent to the LLM
+            print("\n----- SENDING PROMPT TO LLM -----")
+            print(f"Model: {self.model_name}")
+            for i, msg in enumerate(ollama_messages):
+                print(f"\n[Message {i}] Role: {msg['role']}")
+                print(f"Content: {msg['content'][:200]}..." if len(msg['content']) > 200 else f"Content: {msg['content']}")
+            print("----- END OF PROMPT -----\n")
+            
             # Send request to Ollama
             response = self.client.chat(
                 model=self.model_name,
@@ -106,7 +115,6 @@ Remember:
             print(f"Error in chat: {e}")
             return "Sorry, there was an error processing your request."
 
-
 # -----------------------------------------------------------------------------
 # SESSION MANAGEMENT
 # -----------------------------------------------------------------------------
@@ -116,23 +124,32 @@ class SessionManager:
     @staticmethod
     def initialize_session(session):
         """Initialize a new chat session."""
-        session['session_id'] = str(uuid.uuid4())
+        # Initialize core session structure only if session_id is missing
+        if 'session_id' not in session:
+            session['session_id'] = str(uuid.uuid4())
+            welcome_msg = {
+                "id": "welcome-msg",
+                "role": "assistant",
+                "content": "Welcome to QuestionnAIre. I'm a Chatbot that asks the patient questions while they wait for the appointment. The doctor can specify how the questions have to be answered and I will rephrase questions or ask again until I get sufficient answers. The doctor then gets a summary before seeing the patient. Here is an example question: How much do you smoke?"
+            }
+            session['chat_messages'] = [welcome_msg]
+            session['debug_mode_enabled'] = False # Initialize debug mode
         
-        # Add welcome message to chat history
-        welcome_msg = {
-            "id": "welcome-msg",
-            "role": "assistant",
-            "content": "Welcome to AnamneseAI. I'm a Chatbot that asks the patient questions while he is waiting for the appointment. The doctor can specify how the questions have to be answered and i will rephrase questions or ask again until i get sufficient answers. The doctor then gets a summary before seeing the patient. Here is an example question: How much do you smoke?"
-        }
-        session['chat_messages'] = [welcome_msg]
-    
+        # Ensure debug_mode_enabled exists even if session_id was already there
+        # This handles cases where an old session might exist without this flag
+        if 'debug_mode_enabled' not in session:
+             session['debug_mode_enabled'] = False
+        if 'chat_messages' not in session: # Ensure chat_messages list exists
+            session['chat_messages'] = []
+
+
     @staticmethod
     def add_message(session, role, content):
         """Add a message to the session chat history."""
         message_id = str(uuid.uuid4())
         message = {"id": message_id, "role": role, "content": content}
         
-        if 'chat_messages' not in session:
+        if 'chat_messages' not in session: # Should be initialized by initialize_session
             session['chat_messages'] = []
             
         session['chat_messages'].append(message)
@@ -147,16 +164,12 @@ class SessionManager:
     def cleanup():
         """Clean up session data directories."""
         try:
-            # Path to the default session data directory used by Starlette's SessionMiddleware
             session_dir = ".sessions"
-            
-            # Check if the directory exists and remove it
             if os.path.exists(session_dir):
                 shutil.rmtree(session_dir)
                 print(f"Removed session data directory: {session_dir}")
         except Exception as e:
             print(f"Error cleaning session data: {e}")
-
 
 # -----------------------------------------------------------------------------
 # UI COMPONENTS
@@ -172,7 +185,6 @@ class UIComponents:
             Script(src="https://unpkg.com/htmx.org@1.9.10"),
             Script(src="https://unpkg.com/htmx.org@1.9.10/dist/ext/loading-states.js"),
             Link(rel="stylesheet", href="https://cdn.jsdelivr.net/npm/daisyui@4.10.1/dist/full.min.css"),
-            # Custom styles with medical theme
             Script("""
             tailwind.config = {
               theme: {
@@ -186,7 +198,6 @@ class UIComponents:
               }
             }
             """, type="text/javascript"),
-            # Initialize HTMX extensions
             Script("""
             document.addEventListener('DOMContentLoaded', function() {
                 htmx.config.useTemplateFragments = true;
@@ -195,49 +206,24 @@ class UIComponents:
             });
             """, type="text/javascript"),
         )
-    
+
     @staticmethod
     def get_head_components(model_name):
         """Return the head components for the application."""
         return (
-            Title("AnamneseAI - Professional Medical Assistant"),
-            # Add favicon and meta tags appropriate for a medical application
+            Title("QuestionnAIre - Professional Medical Assistant"),
             Link(rel="icon", href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚕️</text></svg>"),
             Meta(name="description", content="Professional AI assistant for taking a patients history"),
-            # Add viewport meta for better mobile experience
             Meta(name="viewport", content="width=device-width, initial-scale=1.0"),
-            # Add professional medical-themed styling to the body
             Style("""
-                body {
-                    background-color: #f8fafc;
-                    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                }
-                /* Custom scrollbar for a more professional look */
-                ::-webkit-scrollbar {
-                    width: 8px;
-                    height: 8px;
-                }
-                ::-webkit-scrollbar-track {
-                    background: #f1f5f9;
-                }
-                ::-webkit-scrollbar-thumb {
-                    background: #cbd5e1;
-                    border-radius: 4px;
-                }
-                ::-webkit-scrollbar-thumb:hover {
-                    background: #94a3b8;
-                }
-                /* Loading indicator animation styles */
-                #loading-indicator {
-                    opacity: 0;
-                    transition: opacity 200ms ease-in;
-                }
-                #loading-indicator.processing {
-                    opacity: 1 !important;
-                }
-                .htmx-request .htmx-indicator {
-                    opacity: 1 !important;
-                }
+                body { background-color: #f8fafc; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+                ::-webkit-scrollbar { width: 8px; height: 8px; }
+                ::-webkit-scrollbar-track { background: #f1f5f9; }
+                ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+                ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+                #loading-indicator { opacity: 0; transition: opacity 200ms ease-in; }
+                #loading-indicator.processing { opacity: 1 !important; }
+                .htmx-request .htmx-indicator { opacity: 1 !important; }
             """),
         )
     
@@ -247,7 +233,6 @@ class UIComponents:
         is_user = message.get("role") == "user"
         chat_alignment = "chat-end" if is_user else "chat-start"
 
-        # Professional medical-themed styling
         if message.get("role") == "error":
             bubble_color = "bg-red-100 text-red-800"
             border_style = "border-l-4 border-red-500"
@@ -258,10 +243,7 @@ class UIComponents:
             bubble_color = "bg-medical-blue text-white"
             border_style = ""
         
-        # Get content, defaulting to an empty string if missing
         message_content = message.get("content", "")
-
-        # Professional avatar for medical interface
         avatar_initial = "P" if is_user else "A"
         avatar_bg = "bg-medical-blue-dark text-white" if is_user else "bg-white text-medical-blue-dark border border-medical-blue"
         avatar = Div(
@@ -271,14 +253,10 @@ class UIComponents:
             ),
             cls="chat-image avatar"
         )
-
-        # Professional role label
         role_label = "Patient" if is_user else "Assistant"
-
         return Div(
             avatar,
             Div(role_label, cls="chat-header text-xs font-medium mb-1 text-gray-600"),
-            # Render content within <p> tags inside the bubble, applying medical styling
             Div(
                 P(message_content), 
                 cls=f"chat-bubble shadow-sm {bubble_color} {border_style} break-words prose prose-sm sm:prose-base rounded-lg px-4 py-3"
@@ -331,7 +309,6 @@ class UIComponents:
         """Return the header component for the chat interface."""
         return Div(
             Div(
-                # Medical logo/icon
                 Div(
                     _innerHTML="""
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-medical-blue" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -340,17 +317,14 @@ class UIComponents:
                     """,
                     cls="mr-3"
                 ),
-                # Title and subtitle
                 Div(
-                    H1("AnamneseAI", cls="text-2xl font-bold text-medical-blue-dark"),
+                    H1("QuestionnAIre", cls="text-2xl font-bold text-medical-blue-dark"),
                     P("Patient history Chatbot", cls="text-sm text-gray-600"),
                     cls="flex flex-col"
                 ),
                 cls="flex items-center mb-2"
             ),
-            # Subtle divider
             Div(cls="w-full h-px bg-gray-200 mb-4"),
-            # Model info with medical styling
             Div(
                 Div(
                     _innerHTML="""
@@ -365,22 +339,52 @@ class UIComponents:
             ),
             cls="bg-white rounded-lg shadow-sm p-4 mb-4 border border-gray-200"
         )
-    
+
     @staticmethod
-    def chat_interface(messages, model_name):
+    def debug_status_indicator_and_toggle_button(is_enabled: bool):
+        status_text = "ON" if is_enabled else "OFF"
+        button_text = "Disable Debug Mode" if is_enabled else "Enable Debug Mode"
+        button_cls = "btn-warning" if is_enabled else "btn-outline btn-info" # DaisyUI button classes
+        return Div(
+            Span(f"Debug Mode: {status_text}", cls="mr-2 text-sm font-medium align-middle"),
+            Button(
+                button_text,
+                hx_post="/toggle_debug",
+                hx_target="#debug-status-container", 
+                hx_swap="outerHTML",                
+                cls=f"btn btn-xs {button_cls} align-middle" # DaisyUI button classes
+            ),
+            id="debug-status-container", 
+            cls="py-2 text-center" 
+        )
+
+    @staticmethod
+    def continue_debug_button():
+        return Button(
+            "Process AI Response",
+            hx_post="/continue_debug",
+            hx_target="#chat-box",      
+            hx_swap="beforeend",        
+            cls="btn btn-sm btn-accent mt-2" # DaisyUI button class
+        )
+
+    @staticmethod
+    def clear_debug_action_area_component():
+        """Returns an empty Div to clear the debug action area via OOB swap."""
+        return Div(id="debug-action-area", hx_swap_oob="true")
+
+    @staticmethod
+    def chat_interface(messages, model_name, debug_mode_enabled: bool):
         """Renders the full chat interface."""
-        # Default to empty list if no messages provided
-        if messages is None:
-            messages = []
+        if messages is None: messages = []
             
-        # Create the chat box with messages
         chat_box = Div(
             *[UIComponents.chat_message(msg) for msg in messages],
             id="chat-box",
-            cls="p-4 space-y-6 overflow-y-auto h-[calc(100vh-220px)] bg-white rounded-lg shadow-md border border-gray-200"
+            # Adjusted height to account for debug toggle potentially taking space
+            cls="p-4 space-y-6 overflow-y-auto h-[calc(100vh-290px)] bg-white rounded-lg shadow-md border border-gray-200" 
         )
 
-        # Create the chat form
         chat_form = Form(
             UIComponents.input_field(),
             UIComponents.submit_button(),
@@ -398,11 +402,14 @@ class UIComponents:
             cls="p-4 flex items-center bg-gray-50 rounded-lg shadow-sm mt-4 sticky bottom-0 border border-gray-200", 
         )
 
-        # Combine all components into the main interface
+        debug_toggle_component = UIComponents.debug_status_indicator_and_toggle_button(debug_mode_enabled)
+
         return Div(
             UIComponents.header(model_name),
             chat_box,
             chat_form,
+            Div(id="debug-action-area", cls="text-center mt-1 mb-1"), # Placeholder for "Process AI" button
+            debug_toggle_component, # This is the Div with id="debug-status-container"
             cls="container mx-auto max-w-3xl p-4 flex flex-col h-screen font-sans bg-gray-50"
         )
     
@@ -414,76 +421,104 @@ class UIComponents:
             name="user_message",
             placeholder="Type your medical query...",
             cls="input bg-white border border-gray-300 focus:border-medical-blue focus:ring-2 focus:ring-medical-blue-light w-full flex-grow mr-2 rounded-lg",
-            hx_swap_oob="true",  # Swap outerHTML of the element with this ID
-            value="",  # Set value to empty
-            autofocus=True  # Re-focus the input field
+            hx_swap_oob="true", 
+            value="", 
+            autofocus=True 
         )
-
 
 # -----------------------------------------------------------------------------
 # MAIN APPLICATION
 # -----------------------------------------------------------------------------
-# Initialize the LLM service
 llm_service = LLMService()
-
-# Initialize FastHTML application
 app = FastHTML(hdrs=UIComponents.get_headers())
 rt = app.route
 
-# Define routes
 @rt("/")
-async def get_chat_ui(session):
+async def get_chat_ui(session: dict):
     """Serves the main chat page, loading history from session."""
-    # Initialize a new session
-    SessionManager.initialize_session(session)
+    SessionManager.initialize_session(session) 
     
-    # Render the page with components
+    initial_debug_status = session.get('debug_mode_enabled', False)
+    
     return (
         *UIComponents.get_head_components(llm_service.get_model_name()),
-        UIComponents.chat_interface(session['chat_messages'], llm_service.get_model_name())
+        UIComponents.chat_interface(
+            SessionManager.get_messages(session), 
+            llm_service.get_model_name(),
+            initial_debug_status 
+        )
     )
 
+@rt("/toggle_debug")
+async def toggle_debug_mode(session: dict):
+    current_status = session.get('debug_mode_enabled', False)
+    session['debug_mode_enabled'] = not current_status
+    
+    updated_toggle_button = UIComponents.debug_status_indicator_and_toggle_button(session['debug_mode_enabled'])
+    
+    components_to_return = [updated_toggle_button]
+
+    if not session['debug_mode_enabled']:
+        components_to_return.append(UIComponents.clear_debug_action_area_component())
+        
+    return tuple(components_to_return)
 
 @rt("/chat")
-async def post_chat_message(user_message: str, session):
+async def post_chat_message(user_message: str, session: dict):
     """Handles incoming user messages, gets AI response, and updates chat via HTMX."""
-    # Get the clear input component
-    clear_input_component = UIComponents.clear_input_component()
+    clear_input = UIComponents.clear_input_component()
 
-    # If the message is empty, just clear the input and do nothing else
     if not user_message or not user_message.strip():
-        return clear_input_component
+        return clear_input
 
-    # Add the user's message to the session history
     user_msg_data = SessionManager.add_message(session, "user", user_message)
+    user_msg_component = UIComponents.chat_message(user_msg_data)
     
-    # Get the current chat history for this session
+    components_to_return = [user_msg_component, clear_input]
+
+    if session.get('debug_mode_enabled', False):
+        # In debug mode, add user message and the "Process AI" button via OOB swap
+        process_ai_button_container = Div(
+            UIComponents.continue_debug_button(), 
+            id="debug-action-area", 
+            hx_swap_oob="true"      
+        )
+        components_to_return.append(process_ai_button_container)
+    else:
+        # Debug mode is off, process AI response immediately
+        session_chat_messages = SessionManager.get_messages(session)
+        ai_response_content = llm_service.chat(session_chat_messages)
+        ai_msg_data = SessionManager.add_message(session, "assistant", ai_response_content)
+        ai_message_component = UIComponents.chat_message(ai_msg_data)
+        components_to_return.append(ai_message_component)
+        components_to_return.append(UIComponents.clear_debug_action_area_component())
+           
+    return tuple(components_to_return)
+
+@rt("/continue_debug")
+async def continue_ai_response(session: dict):
+    """Triggers AI response when the 'Process AI Response' button is clicked."""
+    if not session.get('debug_mode_enabled', False):
+        return UIComponents.clear_debug_action_area_component()
+
     session_chat_messages = SessionManager.get_messages(session)
-
-    # Get AI response
-    ai_response_content = llm_service.chat(session_chat_messages)
     
-    # Add the AI's response to the session history
+    if not session_chat_messages or session_chat_messages[-1]["role"] != "user":
+       return UIComponents.clear_debug_action_area_component()
+
+    ai_response_content = llm_service.chat(session_chat_messages)
     ai_msg_data = SessionManager.add_message(session, "assistant", ai_response_content)
-
-    # Create UI components for the messages
-    user_message_component = UIComponents.chat_message(user_msg_data)
     ai_message_component = UIComponents.chat_message(ai_msg_data)
-
-    # Return the components that HTMX will swap in
-    return user_message_component, ai_message_component, clear_input_component
-
+    
+    return ai_message_component, UIComponents.clear_debug_action_area_component()
 
 # -----------------------------------------------------------------------------
 # APPLICATION ENTRY POINT
 # -----------------------------------------------------------------------------
 if __name__ == "__main__":
-    print(f"Starting AnamneseAI Chatbot...")
+    print(f"Starting QuestionnAIre Chatbot...")
     print(f"Using LLM model: {llm_service.get_model_name()}")
     print(f"System prompt configured with {len(llm_service.get_system_prompt())} characters")
     
-    # Clean up any existing session data before starting
     SessionManager.cleanup()
-    
-    # Start the server
     serve(port=5001)
