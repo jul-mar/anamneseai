@@ -1,5 +1,74 @@
 [
-  { "id": "q1_symptoms", "text": "What are your main symptoms today?" },
-  { "id": "q2_duration", "text": "How long have you been experiencing these symptoms?" },
-  { "id": "q3_severity", "text": "On a scale of 1 to 10, how severe is your discomfort related to these symptoms?"}
+  {
+    "id": "cough_onset",
+    "text": "When did the cough start?",
+    "criteria": [
+      "Example: About 3 days ago",
+      "Example: Last Monday",
+      "Example: For roughly 2 weeks",
+      "A specific date or duration is helpful."
+    ]
+  },
+  {
+    "id": "cough_frequency",
+    "text": "How often do you find yourself coughing?",
+    "criteria": [
+      "Constantly",
+      "Frequently throughout the day (e.g., several times an hour)",
+      "Occasionally (e.g., a few times a day)",
+      "Rarely (e.g., only once or twice a day)",
+      "Mostly in the mornings",
+      "It's an all day long thing"
+    ]
+  },
+  {
+    "id": "cough_character",
+    "text": "How would you describe the cough? For example, is it dry, or are you coughing anything up? Is it a tickling cough, or more of a deep cough?",
+    "criteria": [
+      "Dry (no phlegm)",
+      "Chesty (with phlegm)",
+      "Hacking cough",
+      "Barking sound",
+      "Tickling in the throat",
+      "Deep from the chest",
+      "Example: It's a dry, irritating cough.",
+      "Example: I cough up some phlegm sometimes."
+    ]
+  },
+  {
+    "id": "cough_triggers",
+    "text": "Is there anything specific that seems to trigger your cough or make it worse?",
+    "criteria": [
+      "Lying down",
+      "Exercise or physical activity",
+      "Cold air",
+      "After eating certain foods",
+      "Dust or other irritants",
+      "Specific times of day (e.g., mornings, nights)",
+      "Example: It gets worse when I lie down at night."
+    ]
+  },
+  {
+    "id": "cough_relievers",
+    "text": "Does anything make your cough better or provide some relief?",
+    "criteria": [
+      "Drinking water or warm fluids",
+      "Specific medication or lozenges",
+      "Sitting upright",
+      "Avoiding known triggers",
+      "Example: Warm tea seems to help a bit."
+    ]
+  },
+  {
+    "id": "cough_severity_impact",
+    "text": "How much would you say the cough is affecting your daily life or your sleep?",
+    "criteria": [
+      "Not at all, it's just minor",
+      "Mildly, a bit annoying but manageable",
+      "Moderately, it interferes with some activities or sleep",
+      "Severely, it significantly disrupts my activities and/or sleep",
+      "Example: It keeps me up at night.",
+      "Example: It's mostly just a nuisance during the day."
+    ]
+  }
 ]
