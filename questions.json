@@ -1,0 +1,5 @@
+[
+  { "id": "q1_symptoms", "text": "What are your main symptoms today?" },
+  { "id": "q2_duration", "text": "How long have you been experiencing these symptoms?" },
+  { "id": "q3_severity", "text": "On a scale of 1 to 10, how severe is your discomfort related to these symptoms?"}
+]
