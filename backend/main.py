@@ -1,129 +1,127 @@
 # backend/main.py
-from fasthtml.common import *
-from fasthtml.fastapp import *
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
-from starlette.middleware.cors import CORSMiddleware
-from starlette.responses import JSONResponse
-from starlette.requests import Request
+from backend.core import SessionManager, handle_bot_turn, _trigger_initial_bot_action, question_service
 
-# Importiere Logik aus der ursprünglichen Datei. Dies wird später refaktorisiert.
-from questionnAIre import SessionManager, _trigger_initial_bot_action, handle_bot_turn
+app = FastAPI()
 
-app = FastHTML()
-rt = app.route
+# Global dictionary to store session data in memory
+# Key: session_id (str), Value: session_data (dict)
+sessions = {}
 
-# Ein einfacher In-Memory-Speicher für Sitzungen für die Entwicklung.
-SESSIONS = {}
-
-# Füge die CORS-Middleware hinzu, um Anfragen vom Frontend zu erlauben.
+# CORS (Cross-Origin Resource Sharing)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # Allows all origins
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["*"],  # Allows all methods
+    allow_headers=["*"],  # Allows all headers
 )
 
-@rt("/api/session/start", methods=["POST"])
-async def start_session():
-    """
-    Initialisiert eine neue Chat-Sitzung, speichert sie serverseitig
-    und gibt die Sitzungs-ID sowie die ersten Nachrichten zurück.
-    """
-    session_data = {}
-    SessionManager.initialize_session(session_data)
+def get_session(request: Request):
+    session_id = request.cookies.get("session_id")
+    if session_id and session_id in sessions:
+        return sessions[session_id]
+    return {}
+
+def save_session(session: dict, response: JSONResponse):
+    if "session_id" in session:
+        session_id = session["session_id"]
+        sessions[session_id] = session
+        response.set_cookie(key="session_id", value=session_id, httponly=True)
+
+@app.post("/api/session/start")
+async def start_session(request: Request):
+    session = get_session(request)
+    SessionManager.initialize_session(session)
+    await _trigger_initial_bot_action(session)
     
-    session_id = session_data['session_id']
-    SESSIONS[session_id] = session_data
+    # In non-debug mode, the bot should immediately ask the first question
+    if not session.get('debug_mode_enabled', False):
+        await handle_bot_turn(session)
 
-    # Triggert die erste Aktion des Bots (z.B. die erste Frage vorbereiten)
-    await _trigger_initial_bot_action(session_data)
+    response_data = {
+        "chat_messages": session.get('chat_messages', []),
+        "bot_state": session.get('bot_state'),
+        "debug_mode": session.get('debug_mode_enabled')
+    }
+    response = JSONResponse(content=response_data)
+    save_session(session, response)
+    return response
 
-    # Wenn der Debug-Modus nicht aktiv ist, stellt der Bot sofort die erste Frage.
-    if not session_data.get('debug_mode_enabled') and session_data.get('bot_state') == "WAITING_TO_ASK_PREDEFINED":
-        await handle_bot_turn(session_data, user_message_content=None)
+@app.post("/api/chat")
+async def chat(request: Request):
+    session = get_session(request)
+    if not session:
+        raise HTTPException(status_code=400, detail="Session not started.")
 
-    # Gebe den Anfangszustand an das Frontend zurück.
-    return JSONResponse({
-        "session_id": session_id,
-        "messages": session_data.get('chat_messages', [])
-    })
+    data = await request.json()
+    user_message = data.get("message")
 
-@rt("/api/chat", methods=["POST"])
-async def post_chat(request: Request):
-    """
-    Verarbeitet eine einzelne Benutzernachricht für eine bestehende Sitzung
-    und gibt die daraus resultierenden neuen Chat-Nachrichten zurück.
-    """
-    try:
-        data = await request.json()
-        session_id = data.get("session_id")
-        user_message = data.get("user_message")
+    if not user_message:
+        raise HTTPException(status_code=422, detail="Message cannot be empty.")
 
-        if not session_id or not user_message:
-            return JSONResponse({"error": "session_id and user_message are required"}, status_code=400)
+    # Add user message to chat history
+    SessionManager.add_message_to_display_chat(session, 'user', user_message)
+    
+    # Let the bot handle the turn
+    await handle_bot_turn(session, user_message_content=user_message)
 
-        session_data = SESSIONS.get(session_id)
-        if not session_data:
-            return JSONResponse({"error": "Session not found"}, status_code=404)
+    response_data = {
+        "chat_messages": session.get('chat_messages', []),
+        "bot_state": session.get('bot_state'),
+    }
+    response = JSONResponse(content=response_data)
+    save_session(session, response)
+    return response
 
-        # Merken, wie viele Nachrichten wir vor diesem Turn hatten.
-        messages_before_count = len(session_data.get('chat_messages', []))
-
-        # Die ursprüngliche Funktion `post_chat_message` hat die Bot-Logik angestoßen.
-        # Wir replizieren diesen Teil hier, aber geben JSON statt UI-Komponenten zurück.
-        
-        # 1. Benutzernachricht zur Konversation hinzufügen
-        SessionManager.add_message_to_display_chat(session_data, "user", user_message)
-        
-        # 2. Den Bot den Zug ausführen lassen (dies modifiziert session_data)
-        await handle_bot_turn(session_data, user_message_content=user_message)
-
-        # 3. Nur die neuen Nachrichten zurückgeben, die in diesem Turn entstanden sind.
-        new_messages = session_data.get('chat_messages', [])[messages_before_count:]
-
-        return JSONResponse({
-            "messages": new_messages
-        })
-    except Exception as e:
-        # Grundlegendes Error-Handling
-        print(f"Error in /api/chat: {e}")
-        return JSONResponse({"error": "An internal error occurred"}, status_code=500)
-
-@rt("/api/session/restart", methods=["POST"])
+@app.post("/api/session/restart")
 async def restart_session(request: Request):
-    """
-    Setzt eine bestehende Sitzung zurück oder erstellt eine neue,
-    falls die ID nicht existiert.
-    """
-    data = await request.json()
-    session_id = data.get("session_id")
-
-    if session_id and session_id in SESSIONS:
-        del SESSIONS[session_id]
-
-    # Nach dem Löschen (oder wenn keine ID gesendet wurde),
-    # einfach eine neue Sitzung starten und zurückgeben.
-    return await start_session()
-
-@rt("/api/debug/toggle", methods=["POST"])
-async def toggle_debug(request: Request):
-    """
-    Schaltet den Debug-Modus für eine Sitzung um und gibt den neuen
-    Status zurück.
-    """
-    data = await request.json()
-    session_id = data.get("session_id")
-
-    if not session_id or session_id not in SESSIONS:
-        return JSONResponse({"error": "Session not found"}, status_code=404)
+    session = get_session(request)
+    session_id = session.get("session_id")
+    if session_id and session_id in sessions:
+        del sessions[session_id]
     
-    session_data = SESSIONS[session_id]
-    current_status = session_data.get('debug_mode_enabled', False)
-    new_status = not current_status
-    session_data['debug_mode_enabled'] = new_status
+    # Start a new session
+    new_session = {}
+    SessionManager.initialize_session(new_session)
+    await _trigger_initial_bot_action(new_session)
+    if not new_session.get('debug_mode_enabled', False):
+        await handle_bot_turn(new_session)
 
-    return JSONResponse({"debug_mode_enabled": new_status})
+    response_data = {
+        "chat_messages": new_session.get('chat_messages', []),
+        "bot_state": new_session.get('bot_state'),
+        "debug_mode": new_session.get('debug_mode_enabled')
+    }
+    response = JSONResponse(content=response_data)
+    save_session(new_session, response)
+    return response
+
+@app.post("/api/debug/toggle")
+async def toggle_debug(request: Request):
+    session = get_session(request)
+    if not session:
+        raise HTTPException(status_code=400, detail="Session not started.")
+    
+    session['debug_mode_enabled'] = not session.get('debug_mode_enabled', False)
+    
+    # If debug mode was just turned OFF, and the bot is in a waiting state, proceed
+    if not session['debug_mode_enabled']:
+        bot_state = session.get('bot_state')
+        if bot_state in ["WAITING_TO_ASK_PREDEFINED", "EVALUATING_ANSWER", "GENERATING_SUMMARY"]:
+            await handle_bot_turn(session)
+
+    response_data = {
+        "chat_messages": session.get('chat_messages', []),
+        "bot_state": session.get('bot_state'),
+        "debug_mode": session.get('debug_mode_enabled')
+    }
+    response = JSONResponse(content=response_data)
+    save_session(session, response)
+    return response
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True) 
+    uvicorn.run(app, host="0.0.0.0", port=8000) 

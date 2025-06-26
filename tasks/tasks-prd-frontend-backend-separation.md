@@ -29,10 +29,10 @@
   - [x] 2.5 Stelle sicher, dass alle Endpunkte JSON-Objekte zurückgeben und nicht HTML.
 
 - [ ] 3.0 Backend-Logik refaktorisieren und UI-Code entfernen
-  - [ ] 3.1 Lösche die `UIComponents`-Klasse und alle ihre Aufrufe aus dem Backend-Code.
-  - [ ] 3.2 Entferne jeglichen Code, der `fasthtml`-Komponenten (wie `Div`, `Button`, `Form`) direkt generiert.
-  - [ ] 3.3 Trenne die Kernlogik (z.B. `SessionManager`, `LLMService`, `QuestionService`) vom API-Handling. Es wird empfohlen, diese Logik in eine separate `backend/core.py` zu verschieben.
-  - [ ] 3.4 Passe die Logik so an, dass sie nur noch Daten verarbeitet und den Status verwaltet, anstatt UI-Komponenten zu erstellen.
+  - [x] 3.1 Lösche die `UIComponents`-Klasse und alle ihre Aufrufe aus dem Backend-Code.
+  - [x] 3.2 Entferne jeglichen Code, der `fasthtml`-Komponenten (wie `Div`, `Button`, `Form`) direkt generiert.
+  - [x] 3.3 Trenne die Kernlogik (z.B. `SessionManager`, `LLMService`, `QuestionService`) vom API-Handling. Es wird empfohlen, diese Logik in eine separate `backend/core.py` zu verschieben.
+  - [x] 3.4 Passe die Logik so an, dass sie nur noch Daten verarbeitet und den Status verwaltet, anstatt UI-Komponenten zu erstellen.
 
 - [ ] 4.0 Statisches Frontend erstellen
   - [ ] 4.1 Baue in `frontend/index.html` die grundlegende Seitenstruktur mit einem Chat-Container und einem Eingabeformular auf.

@@ -1,12 +1,10 @@
 # chat.py
-from fasthtml.common import *
-import ollama  # ollama python client
-import uuid  # For unique IDs for messages
-import datetime  # Not strictly needed for logic, but good to keep if it was used elsewhere
-import os  # For creating session directory
-import shutil  # For removing session directory
-import json # For loading questions from JSON file
-from starlette.responses import RedirectResponse, Response # Ensure Response is imported
+import ollama
+import uuid
+import datetime
+import os
+import shutil
+import json
 from huggingface_hub import InferenceClient
 from abc import ABC, abstractmethod
 from dotenv import load_dotenv
@@ -159,16 +157,23 @@ class HuggingFaceProvider(LLMProvider):
             self.client = self._create_mock_client()
     
     def _create_mock_client(self):
+        class MockMessage:
+            def __init__(self, content):
+                self.content = content
+
+        class MockChoice:
+            def __init__(self, content):
+                self.message = MockMessage(content)
+
+        class MockHFResponse:
+            def __init__(self, content):
+                self.choices = [MockChoice(content)]
+
         class MockHFClient:
             def chat_completion(self, messages, max_tokens=None, temperature=None):
                 print("--- Using Mock Hugging Face Client ---")
-                return type('obj', (object,), {
-                    'choices': [type('obj', (object,), {
-                        'message': type('obj', (object,), {
-                            'content': 'Mock response from Hugging Face. Please set HF_TOKEN environment variable.'
-                        })()
-                    })()]
-                })()
+                return MockHFResponse('Mock response from Hugging Face. Please set HF_TOKEN environment variable.')
+        
         return MockHFClient()
     
     def chat(self, messages: list, **kwargs) -> str:
@@ -438,113 +443,10 @@ class SessionManager:
         except Exception as e: print(f"Error cleaning session data: {e}")
 
 # -----------------------------------------------------------------------------
-# UI COMPONENTS
-# -----------------------------------------------------------------------------
-class UIComponents:
-    @staticmethod
-    def get_headers():
-        return (
-            Script(src="https://cdn.tailwindcss.com"),
-            Script(src="https://unpkg.com/htmx.org@1.9.10"),
-            Script(src="https://unpkg.com/htmx.org@1.9.10/dist/ext/loading-states.js"),
-            Link(rel="stylesheet", href="https://cdn.jsdelivr.net/npm/daisyui@4.10.1/dist/full.min.css"),
-            Script("""
-            tailwind.config = {
-              theme: { extend: { colors: { 'medical-blue': '#0077b6', 'medical-blue-light': '#90e0ef', 'medical-blue-dark': '#03045e' } } }
-            }
-            """, type="text/javascript"),
-            Script("""
-            document.addEventListener('DOMContentLoaded', function() {
-                htmx.config.useTemplateFragments = true;
-                htmx.config.indicatorClass = 'htmx-indicator';
-                htmx.config.requestClass = 'htmx-request';
-                console.log('HTMX configured with indicator class:', htmx.config.indicatorClass);
-            });
-            """, type="text/javascript"),
-        )
-
-    @staticmethod
-    def get_head_components(model_name):
-        return (
-            Title("QuestionnAIre - Professional Medical Assistant"),
-            Link(rel="icon", href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚕️</text></svg>"),
-            Meta(name="description", content="Professional AI assistant for taking a patients history"),
-            Meta(name="viewport", content="width=device-width, initial-scale=1.0"),
-            Style("""
-                body { background-color: #f8fafc; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
-                ::-webkit-scrollbar { width: 8px; height: 8px; } ::-webkit-scrollbar-track { background: #f1f5f9; }
-                ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; } ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-            """),
-        )
-    
-    @staticmethod
-    def chat_message(message):
-        is_user = message.get("role") == "user"
-        chat_alignment = "chat-end" if is_user else "chat-start"
-        if message.get("role") == "error": bubble_color, border_style = "bg-red-100 text-red-800", "border-l-4 border-red-500"
-        elif is_user: bubble_color, border_style = "bg-white text-gray-800", "border-l-4 border-medical-blue"
-        else: bubble_color, border_style = "bg-medical-blue text-white", ""
-        message_content = message.get("content", "")
-        avatar_initial = "P" if is_user else "A" 
-        avatar_bg = "bg-medical-blue-dark text-white" if is_user else "bg-white text-medical-blue-dark border border-medical-blue"
-        avatar = Div(Div(Span(avatar_initial, cls="inline-flex items-center justify-center w-full h-full"), cls=f"w-8 h-8 rounded-full {avatar_bg} flex items-center justify-center text-sm font-semibold shadow-sm"), cls="chat-image avatar")
-        role_label = "Patient" if is_user else "Assistant"
-        return Div(avatar, Div(role_label, cls="chat-header text-xs font-medium mb-1 text-gray-600"), Div(P(message_content, cls="whitespace-pre-wrap"), cls=f"chat-bubble shadow-sm {bubble_color} {border_style} break-words prose prose-sm sm:prose-base rounded-lg px-4 py-3"), cls=f"chat {chat_alignment}", id=f"message-{message.get('id', uuid.uuid4())}")
-
-    @staticmethod
-    def input_field(disabled=False): 
-        attrs = {"id": "user-message-input", "type": "text", "name": "user_message", "placeholder": "Type your medical query...", "cls": "input bg-white border border-gray-300 focus:border-medical-blue focus:ring-2 focus:ring-medical-blue-light w-full flex-grow mr-2 rounded-lg", "autofocus": True}
-        if disabled: attrs["disabled"], attrs["placeholder"] = True, "Conversation ended or bot is processing..."
-        return Input(**attrs)
-    
-    @staticmethod
-    def submit_button(disabled=False): 
-        attrs = {"type": "submit", "cls": "bg-medical-blue hover:bg-medical-blue-dark text-white font-medium py-2 px-6 rounded-lg transition-colors duration-200", "data_loading_disable": True }
-        if disabled: attrs["disabled"] = True
-        return Button("Send", **attrs)
-    
-    @staticmethod
-    def header(model_name):
-        return Div(Div(Div(_innerHTML="""<svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-medical-blue" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>""", cls="mr-3"), Div(H1("QuestionnAIre", cls="text-2xl font-bold text-medical-blue-dark"), P("Patient history Chatbot", cls="text-sm text-gray-600"), cls="flex flex-col"), cls="flex items-center mb-2"), Div(cls="w-full h-px bg-gray-200 mb-4"), Div(Div(_innerHTML="""<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>""", cls="text-medical-blue"), Span(f"Powered by: {model_name}", cls="text-xs text-gray-600"), cls="flex items-center justify-end mb-4"), cls="bg-white rounded-lg shadow-sm p-4 mb-4 border border-gray-200")
-
-    @staticmethod
-    def debug_status_indicator_and_toggle_button(is_enabled: bool):
-        status_text, button_text, button_cls = ("ON", "Disable Debug Mode", "btn-warning") if is_enabled else ("OFF", "Enable Debug Mode", "btn-outline btn-info")
-        return Div(Span(f"Debug Mode: {status_text}", cls="mr-2 text-sm font-medium align-middle"), Button(button_text, hx_post="/toggle_debug", hx_target="#debug-status-container", hx_swap="outerHTML", cls=f"btn btn-xs {button_cls} align-middle"), id="debug-status-container", cls="py-1 text-center")
-
-    @staticmethod
-    def continue_debug_button(): return Button("Process AI Response / Next Step", hx_post="/continue_debug_or_next_step", hx_target="#chat-box", hx_swap="beforeend", cls="btn btn-sm btn-accent mt-1")
-    @staticmethod
-    def clear_debug_action_area_component(): return Div(id="debug-action-area", hx_swap_oob="true")
-    @staticmethod
-    def restart_button(): return Button("Restart Chat", hx_post="/restart_chat", cls="btn btn-sm btn-error btn-outline mt-1")
-
-    @staticmethod
-    def chat_interface(messages, model_name, debug_mode_enabled: bool, bot_state: str):
-        if messages is None: messages = []
-        chat_box_height = "h-[calc(100vh-320px)]" 
-        chat_box = Div(*[UIComponents.chat_message(msg) for msg in messages], id="chat-box", cls=f"p-4 space-y-6 overflow-y-auto {chat_box_height} bg-white rounded-lg shadow-md border border-gray-200")
-        form_is_disabled = bot_state in ["GENERATING_SUMMARY", "DONE", "WAITING_TO_ASK_PREDEFINED"] and not (debug_mode_enabled and bot_state == "WAITING_TO_ASK_PREDEFINED")
-        chat_form_classes = "p-4 flex items-center bg-gray-50 rounded-lg shadow-sm mt-4 sticky bottom-0 border border-gray-200" + (" opacity-50" if form_is_disabled else "")
-        chat_form = Form(
-            UIComponents.input_field(disabled=form_is_disabled),
-            UIComponents.submit_button(disabled=form_is_disabled),
-            hx_post="/chat", hx_target="#chat-box", hx_swap="beforeend",
-            hx_on_htmx_after_on_load="this.closest('.container').querySelector('#chat-box').scrollTop = this.closest('.container').querySelector('#chat-box').scrollHeight; if(document.activeElement.tagName === 'BUTTON' && !document.getElementById('user-message-input').disabled) { document.getElementById('user-message-input').focus(); }",
-            cls=chat_form_classes
-        )
-        controls_container = Div(Div(id="debug-action-area", cls="text-center mt-1 mb-1"), UIComponents.debug_status_indicator_and_toggle_button(debug_mode_enabled), UIComponents.restart_button(), cls="mt-1 space-y-2")
-        return Div(UIComponents.header(model_name), chat_box, chat_form, controls_container, cls="container mx-auto max-w-3xl p-4 flex flex-col h-screen font-sans bg-gray-50")
-    
-    @staticmethod
-    def clear_input_component(): return Input(id="user-message-input", name="user_message", placeholder="Type your medical query...", cls="input bg-white border border-gray-300 focus:border-medical-blue focus:ring-2 focus:ring-medical-blue-light w-full flex-grow mr-2 rounded-lg", hx_swap_oob="true", value="", autofocus=True)
-
-# -----------------------------------------------------------------------------
-# MAIN APPLICATION
+# MAIN APPLICATION LOGIC (Refaktorisiert)
 # -----------------------------------------------------------------------------
 question_service = QuestionService() 
 
-# --- Load configuration from config.json ---
 def load_config():
     """Load the complete configuration from config.json."""
     try:
@@ -564,7 +466,6 @@ def create_llm_service_from_config():
     provider = config.get("provider", LLMService.DEFAULT_PROVIDER)
     model_name = config.get("model_name", LLMService.DEFAULT_MODEL)
     
-    # Extract provider-specific configs
     provider_configs = {}
     if "huggingface" in config:
         provider_configs["huggingface"] = config["huggingface"]
@@ -574,11 +475,8 @@ def create_llm_service_from_config():
     return LLMService(provider=provider, model_name=model_name, config=provider_configs)
 
 llm_service = create_llm_service_from_config()
-app = FastHTML(hdrs=UIComponents.get_headers())
-rt = app.route
 
 async def _trigger_initial_bot_action(session: dict):
-    components = []
     if session.get('bot_state') == "INIT":
         first_q_id = question_service.get_first_question_id()
         if first_q_id:
@@ -587,43 +485,13 @@ async def _trigger_initial_bot_action(session: dict):
             session['current_question_criteria'] = question_service.get_question_criteria_by_id(first_q_id)
             session['bot_state'] = "WAITING_TO_ASK_PREDEFINED" 
             print(f"INIT: Set to ask first question: {first_q_id}. Bot state: {session['bot_state']}")
-            if session.get('debug_mode_enabled', False): 
-                components.append(Div(UIComponents.continue_debug_button(), id="debug-action-area", hx_swap_oob="true"))
         else:
             SessionManager.add_message_to_display_chat(session, "assistant", "No questions were configured for this session.")
             session['bot_state'] = "DONE"
             print("INIT: No questions. Bot state: DONE")
-    return components
-
-@rt("/")
-async def get_chat_ui(session: dict):
-    SessionManager.initialize_session(session) 
-    await _trigger_initial_bot_action(session) 
-    if not session.get('debug_mode_enabled') and session.get('bot_state') == "WAITING_TO_ASK_PREDEFINED":
-        await handle_bot_turn(session, user_message_content=None)
-    return UIComponents.chat_interface(SessionManager.get_display_messages(session), llm_service.get_model_name(), session.get('debug_mode_enabled', False), session.get('bot_state', "INIT"))
-
-@rt("/toggle_debug")
-async def toggle_debug_mode(session: dict):
-    session['debug_mode_enabled'] = not session.get('debug_mode_enabled', False)
-    print(f"Debug mode toggled to: {session['debug_mode_enabled']}")
-    components = [UIComponents.debug_status_indicator_and_toggle_button(session['debug_mode_enabled'])]
-    bot_state = session.get('bot_state')
-    if not session['debug_mode_enabled']: 
-        components.append(UIComponents.clear_debug_action_area_component())
-        if bot_state in ["WAITING_TO_ASK_PREDEFINED", "EVALUATING_ANSWER", "GENERATING_SUMMARY"]:
-            print(f"Debug off, bot was in {bot_state}. Attempting to auto-proceed.")
-            components.extend(await handle_bot_turn(session, user_message_content=None))
-    elif bot_state not in ["DONE", "INIT", "EXPECTING_USER_ANSWER"] : 
-         components.append(Div(UIComponents.continue_debug_button(), id="debug-action-area", hx_swap_oob="true"))
-    elif bot_state == "EXPECTING_USER_ANSWER" and session.get('debug_mode_enabled', False):
-        # If user has answered and debug is on, the continue button should already be there or re-added if toggling.
-        pass 
-    return tuple(components)
 
 async def handle_bot_turn(session: dict, user_message_content: str | None = None):
-    MAX_FOLLOW_UPS = 3 # Define max follow-ups for a single predefined question
-    components = []
+    MAX_FOLLOW_UPS = 3
     bot_state = session.get('bot_state', "INIT")
     current_q_id = session.get('current_question_id')
     debug_mode = session.get('debug_mode_enabled', False)
@@ -637,52 +505,35 @@ async def handle_bot_turn(session: dict, user_message_content: str | None = None
             session['current_question_criteria'] = question_service.get_question_criteria_by_id(first_q_id)
             session['bot_state'] = "WAITING_TO_ASK_PREDEFINED"
             print(f"INIT -> WAITING_TO_ASK_PREDEFINED for Q_ID: '{first_q_id}'")
-            if not debug_mode: return await handle_bot_turn(session) # Auto-proceed
-            else: components.append(Div(UIComponents.continue_debug_button(), id="debug-action-area", hx_swap_oob="true"))
+            if not debug_mode: await handle_bot_turn(session)
         else: 
-            msg_data = SessionManager.add_message_to_display_chat(session, "assistant", "No questions are configured. End of session.")
-            components.append(UIComponents.chat_message(msg_data))
+            SessionManager.add_message_to_display_chat(session, "assistant", "No questions are configured. End of session.")
             session['bot_state'] = "DONE"
             print("INIT -> DONE (no questions)")
-        return components
 
-    if bot_state == "WAITING_TO_ASK_PREDEFINED":
+    elif bot_state == "WAITING_TO_ASK_PREDEFINED":
         q_id_to_ask = session.get('current_question_id')
         q_text_to_ask = session.get('current_question_text')
         if not q_id_to_ask or not q_text_to_ask:
             print(f"Error: WAITING_TO_ASK_PREDEFINED but Q_ID ('{q_id_to_ask}') or text is invalid.")
             session['bot_state'] = "DONE" 
-            err_msg = SessionManager.add_message_to_display_chat(session, "assistant", "System error: Cannot find the next question.")
-            components.append(UIComponents.chat_message(err_msg))
-            if debug_mode: components.append(UIComponents.clear_debug_action_area_component())
-            return components
-        
-        # For Phase 2, we could have LLM rephrase. For now, direct ask.
-        actual_question_text_from_llm = q_text_to_ask
-        # Optional: Add criteria to the displayed question for user context
-        # q_criteria_for_display = session.get('current_question_criteria', [])
-        # if q_criteria_for_display:
-        #    actual_question_text_from_llm += "\n(Consider: " + "; ".join(q_criteria_for_display) + ")"
+            SessionManager.add_message_to_display_chat(session, "assistant", "System error: Cannot find the next question.")
+            return
 
-
-        msg_data = SessionManager.add_message_to_display_chat(session, "assistant", actual_question_text_from_llm)
-        components.append(UIComponents.chat_message(msg_data))
+        SessionManager.add_message_to_display_chat(session, "assistant", q_text_to_ask)
         session['bot_state'] = "EXPECTING_USER_ANSWER"
-        session['current_question_follow_up_count'] = 0 # Reset for new question
+        session['current_question_follow_up_count'] = 0
         print(f"WAITING_TO_ASK_PREDEFINED -> EXPECTING_USER_ANSWER for Q_ID: '{q_id_to_ask}'")
-        if debug_mode: components.append(UIComponents.clear_debug_action_area_component())
 
     elif bot_state == "EXPECTING_USER_ANSWER":
         if user_message_content is None: 
-            print("EXPECTING_USER_ANSWER but no user_message_content (likely from 'continue debug' too early). Waiting.")
-            if debug_mode: components.append(Div(UIComponents.continue_debug_button(), id="debug-action-area", hx_swap_oob="true"))
-            return components 
+            print("EXPECTING_USER_ANSWER but no user_message_content. Waiting.")
+            return 
         
         SessionManager.add_exchange_to_collected_answers(session, current_q_id, "user", user_message_content)
         session['bot_state'] = "EVALUATING_ANSWER"
         print(f"EXPECTING_USER_ANSWER -> EVALUATING_ANSWER for Q_ID '{current_q_id}'. User answer: '{user_message_content}'")
-        if debug_mode: components.append(Div(UIComponents.continue_debug_button(), id="debug-action-area", hx_swap_oob="true"))
-        else: return await handle_bot_turn(session) # Auto-proceed to evaluate
+        if not debug_mode: await handle_bot_turn(session)
 
     elif bot_state == "EVALUATING_ANSWER":
         q_text = session.get('current_question_text', "the current question")
@@ -706,8 +557,7 @@ async def handle_bot_turn(session: dict, user_message_content: str | None = None
             if isinstance(llm_response_data, dict) and llm_response_data.get("action") == "question_sufficiently_answered":
                 print(f"LLM signaled sufficiency for Q_ID '{current_q_id}'.")
                 ack_text = "Okay, thank you for that information." 
-                ack_msg = SessionManager.add_message_to_display_chat(session, "assistant", ack_text)
-                components.append(UIComponents.chat_message(ack_msg))
+                SessionManager.add_message_to_display_chat(session, "assistant", ack_text)
                 SessionManager.add_exchange_to_collected_answers(session, current_q_id, "assistant", ack_text) 
 
                 session['current_question_follow_up_count'] = 0 
@@ -718,20 +568,18 @@ async def handle_bot_turn(session: dict, user_message_content: str | None = None
                     session['current_question_criteria'] = question_service.get_question_criteria_by_id(next_q_id)
                     session['bot_state'] = "WAITING_TO_ASK_PREDEFINED"
                     print(f"EVALUATING_ANSWER (sufficient) -> WAITING_TO_ASK_PREDEFINED for Q_ID: '{next_q_id}'")
-                    if debug_mode: components.append(Div(UIComponents.continue_debug_button(), id="debug-action-area", hx_swap_oob="true"))
-                    else: return await handle_bot_turn(session)
+                    if not debug_mode: await handle_bot_turn(session)
                 else: 
                     session['bot_state'] = "GENERATING_SUMMARY"
                     print(f"EVALUATING_ANSWER (sufficient, last q) -> GENERATING_SUMMARY")
-                    if debug_mode: components.append(Div(UIComponents.continue_debug_button(), id="debug-action-area", hx_swap_oob="true"))
-                    else: return await handle_bot_turn(session)
+                    if not debug_mode: await handle_bot_turn(session)
             else: 
                 raise ValueError("JSON from LLM was not the expected action signal.")
         except (json.JSONDecodeError, ValueError) as e: 
             print(f"LLM response not a valid action signal (Error: {e}). Treating as follow-up: '{llm_response_raw}'")
-            follow_up_question_text = llm_response_raw.strip() # Ensure no leading/trailing whitespace
+            follow_up_question_text = llm_response_raw.strip()
             
-            if not follow_up_question_text: # Handle case where LLM might return empty or whitespace
+            if not follow_up_question_text:
                 follow_up_question_text = "Could you please provide a bit more detail?"
                 print("LLM returned empty follow-up, using generic one.")
 
@@ -739,8 +587,7 @@ async def handle_bot_turn(session: dict, user_message_content: str | None = None
             if session['current_question_follow_up_count'] > MAX_FOLLOW_UPS:
                 print(f"Max follow-ups ({session['current_question_follow_up_count']}) reached for Q_ID '{current_q_id}'. Forcing move.")
                 forced_ack_text = "Okay, let's move on to the next point for now."
-                forced_ack_msg = SessionManager.add_message_to_display_chat(session, "assistant", forced_ack_text)
-                components.append(UIComponents.chat_message(forced_ack_msg))
+                SessionManager.add_message_to_display_chat(session, "assistant", forced_ack_text)
                 SessionManager.add_exchange_to_collected_answers(session, current_q_id, "assistant", forced_ack_text)
                 
                 session['current_question_follow_up_count'] = 0
@@ -750,23 +597,19 @@ async def handle_bot_turn(session: dict, user_message_content: str | None = None
                     session['current_question_text'] = question_service.get_question_text_by_id(next_q_id)
                     session['current_question_criteria'] = question_service.get_question_criteria_by_id(next_q_id)
                     session['bot_state'] = "WAITING_TO_ASK_PREDEFINED"
-                    if debug_mode: components.append(Div(UIComponents.continue_debug_button(), id="debug-action-area", hx_swap_oob="true"))
-                    else: return await handle_bot_turn(session)
+                    if not debug_mode: await handle_bot_turn(session)
                 else:
                     session['bot_state'] = "GENERATING_SUMMARY"
-                    if debug_mode: components.append(Div(UIComponents.continue_debug_button(), id="debug-action-area", hx_swap_oob="true"))
-                    else: return await handle_bot_turn(session)
+                    if not debug_mode: await handle_bot_turn(session)
             else: 
-                follow_up_msg = SessionManager.add_message_to_display_chat(session, "assistant", follow_up_question_text)
-                components.append(UIComponents.chat_message(follow_up_msg))
+                SessionManager.add_message_to_display_chat(session, "assistant", follow_up_question_text)
                 SessionManager.add_exchange_to_collected_answers(session, current_q_id, "assistant", follow_up_question_text)
                 session['bot_state'] = "EXPECTING_USER_ANSWER" 
                 print(f"EVALUATING_ANSWER (follow-up #{session['current_question_follow_up_count']}) -> EXPECTING_USER_ANSWER for Q_ID '{current_q_id}'")
-                if debug_mode: components.append(UIComponents.clear_debug_action_area_component()) 
 
     elif bot_state == "GENERATING_SUMMARY":
         summary_prompt_parts = [
-            llm_service.get_system_prompt(), # Provide full system context
+            llm_service.get_system_prompt(),
             "\n\nThe following is a transcript of the patient's answers to a series of predefined questions. Please provide a concise, well-structured clinical summary of this information. Focus on the key medical details provided by the patient."
         ]
         collected_data = session.get('collected_answers', {})
@@ -782,77 +625,15 @@ async def handle_bot_turn(session: dict, user_message_content: str | None = None
                     full_exchange_text_for_q.append(f"  {role_label}: {ex['content']}")
                 summary_prompt_parts.append("\n".join(full_exchange_text_for_q))
         
-        summary_llm_messages = [{"role": "user", "content": "\n".join(summary_prompt_parts)}] # Changed to user role for the content part
+        summary_llm_messages = [{"role": "user", "content": "\n".join(summary_prompt_parts)}]
         final_summary_from_llm = llm_service.chat(summary_llm_messages)
 
-        summary_msg_data = SessionManager.add_message_to_display_chat(session, "assistant", "Here is a summary of our conversation:\n\n" + final_summary_from_llm)
-        components.append(UIComponents.chat_message(summary_msg_data))
-        
-        thank_you_msg_data = SessionManager.add_message_to_display_chat(session, "assistant", "Thank you for providing your information. The consultation can now begin.")
-        components.append(UIComponents.chat_message(thank_you_msg_data))
+        SessionManager.add_message_to_display_chat(session, "assistant", "Here is a summary of our conversation:\n\n" + final_summary_from_llm)
+        SessionManager.add_message_to_display_chat(session, "assistant", "Thank you for providing your information. The consultation can now begin.")
 
         session['bot_state'] = "DONE"
         print(f"GENERATING_SUMMARY -> DONE")
-        if debug_mode: components.append(UIComponents.clear_debug_action_area_component())
 
     elif bot_state == "DONE":
         print("Bot state is DONE. No further actions.")
-        if debug_mode: components.append(UIComponents.clear_debug_action_area_component())
-    return components
 
-@rt("/chat")
-async def post_chat_message(user_message: str, session: dict):
-    components = [UIComponents.clear_input_component()]
-    bot_state = session.get('bot_state', "INIT")
-    debug_mode = session.get('debug_mode_enabled', False)
-
-    if bot_state == "DONE":
-        print(f"User message '{user_message}' received but bot is DONE. Ignoring.")
-        ended_msg = SessionManager.add_message_to_display_chat(session, "assistant", "This session has ended. Please restart if you wish to begin again.")
-        components.append(UIComponents.chat_message(ended_msg))
-        return tuple(components)
-    
-    if bot_state == "GENERATING_SUMMARY" and not debug_mode: 
-        print(f"User message '{user_message}' received while bot is auto-summarizing. Ignoring.")
-        return tuple(components)
-
-    if not user_message or not user_message.strip():
-        print("Empty user message received. No action.")
-        if debug_mode and session.get('bot_state') == "EXPECTING_USER_ANSWER":
-            components.append(Div(UIComponents.continue_debug_button(), id="debug-action-area", hx_swap_oob="true"))
-        return tuple(components)
-    
-    user_msg_data = SessionManager.add_message_to_display_chat(session, "user", user_message)
-    components.append(UIComponents.chat_message(user_msg_data))
-
-    if bot_state == "EXPECTING_USER_ANSWER":
-        components.extend(await handle_bot_turn(session, user_message_content=user_message))
-    elif bot_state == "WAITING_TO_ASK_PREDEFINED" and debug_mode:
-        print(f"User message '{user_message}' received while bot WAITING_TO_ASK_PREDEFINED (debug). Displayed. Bot asks on 'Next Step'.")
-        components.append(Div(UIComponents.continue_debug_button(), id="debug-action-area", hx_swap_oob="true"))
-    else:
-        print(f"User message '{user_message}' received in unhandled bot state '{bot_state}'. Displayed, not processed by bot.")
-    return tuple(components)
-
-@rt("/continue_debug_or_next_step") 
-async def continue_debug_or_next_step(session: dict):
-    print(f"'/continue_debug_or_next_step' called. Current bot state: {session.get('bot_state')}")
-    return tuple(await handle_bot_turn(session, user_message_content=None))
-
-@rt("/restart_chat")
-async def restart_chat_session(session: dict):
-    print(f"Restarting chat. Clearing session ID: {session.get('session_id')}")
-    session.clear() 
-    return HTMLResponse(content="", status_code=200, headers={"HX-Refresh": "true"})
-
-# -----------------------------------------------------------------------------
-# APPLICATION ENTRY POINT
-# -----------------------------------------------------------------------------
-if __name__ == "__main__":
-    print(f"Starting QuestionnAIre Chatbot...")
-    print(f"LLM Service: Using provider '{llm_service.provider_name}' with model '{llm_service.get_model_name()}'")
-    print(f"Question Service: Loaded {len(question_service.get_all_question_ids())} questions from '{question_service.filepath}'")
-    if not question_service.get_all_question_ids(): print("Warning: No questions loaded.")
-    else: print(f"First question ID: {question_service.get_first_question_id()}")
-    SessionManager.cleanup() 
-    serve(port=5001)
