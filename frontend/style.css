@@ -1,0 +1,21 @@
+/* Custom Scrollbar Styles */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+::-webkit-scrollbar-track {
+    background: #f1f5f9; /* Corresponds to gray-100 */
+}
+::-webkit-scrollbar-thumb {
+    background: #cbd5e1; /* Corresponds to gray-300 */
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8; /* Corresponds to gray-400 */
+}
+
+/* Add any other custom styles here */
+body {
+    /* The font is now primarily handled by DaisyUI, but this ensures a nice fallback */
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}

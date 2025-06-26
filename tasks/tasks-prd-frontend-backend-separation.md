@@ -28,18 +28,18 @@
   - [x] 2.4 Erstelle einen `POST /api/debug/toggle`-Endpunkt zum Umschalten des Debug-Modus.
   - [x] 2.5 Stelle sicher, dass alle Endpunkte JSON-Objekte zurückgeben und nicht HTML.
 
-- [ ] 3.0 Backend-Logik refaktorisieren und UI-Code entfernen
+- [x] 3.0 Backend-Logik refaktorisieren und UI-Code entfernen
   - [x] 3.1 Lösche die `UIComponents`-Klasse und alle ihre Aufrufe aus dem Backend-Code.
   - [x] 3.2 Entferne jeglichen Code, der `fasthtml`-Komponenten (wie `Div`, `Button`, `Form`) direkt generiert.
   - [x] 3.3 Trenne die Kernlogik (z.B. `SessionManager`, `LLMService`, `QuestionService`) vom API-Handling. Es wird empfohlen, diese Logik in eine separate `backend/core.py` zu verschieben.
   - [x] 3.4 Passe die Logik so an, dass sie nur noch Daten verarbeitet und den Status verwaltet, anstatt UI-Komponenten zu erstellen.
 
-- [ ] 4.0 Statisches Frontend erstellen
-  - [ ] 4.1 Baue in `frontend/index.html` die grundlegende Seitenstruktur mit einem Chat-Container und einem Eingabeformular auf.
-  - [ ] 4.2 Erstelle in `frontend/app.js` Funktionen, um die neuen Backend-API-Endpunkte über `fetch` oder `htmx` aufzurufen.
-  - [ ] 4.3 Implementiere die Logik, um bei erfolgreicher Antwort des Backends dynamisch neue Chat-Nachrichten in der UI darzustellen.
-  - [ ] 4.4 Binde die Funktionalität für den "Neustart"- und "Debug"-Button an die entsprechenden API-Aufrufe.
-  - [ ] 4.5 Übertrage die bestehenden CSS-Stile in eine separate `frontend/style.css`.
+- [x] 4.0 Statisches Frontend erstellen
+  - [x] 4.1 Baue in `frontend/index.html` die grundlegende Seitenstruktur mit einem Chat-Container und einem Eingabeformular auf.
+  - [x] 4.2 Erstelle in `frontend/app.js` Funktionen, um die neuen Backend-API-Endpunkte über `fetch` aufzurufen.
+  - [x] 4.3 Implementiere die Logik, um bei erfolgreicher Antwort des Backends dynamisch neue Chat-Nachrichten in der UI darzustellen.
+  - [x] 4.4 Binde die Funktionalität für den "Neustart"- und "Debug"-Button an die entsprechenden API-Aufrufe.
+  - [x] 4.5 Übertrage die bestehenden CSS-Stile in eine separate `frontend/style.css`.
 
 - [ ] 5.0 Dokumentation und Abschluss
   - [ ] 5.1 Aktualisiere die `README.md` mit klaren Anweisungen, wie man den Backend-Server und den Frontend-Server getrennt startet.
