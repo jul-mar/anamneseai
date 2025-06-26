@@ -1,9 +1,73 @@
-# AI Chat for Patient history
-QuestionnAIre
+# QuestionnAIre - AI Patient History Chatbot
 
-# What is it?
-A Chatbot you can give a number of questions and it will ask these questions the patient, while verifying the questions and rephrasing them if the patient isnt answering them correctly.
+## What is it?
+A sophisticated chatbot designed to interview patients and gather their medical history prior to a doctor's appointment. The application uses a Large Language Model (LLM) to ask a series of predefined questions, evaluate the patient's answers for completeness, and ask clarifying follow-up questions when necessary.
 
+## Architecture
+The application is now split into two main components:
+- **Backend**: A Python-based [FastAPI](https://fastapi.tiangolo.com/) server that handles all the core logic, including chat state management, interaction with the LLM, and serving the API.
+- **Frontend**: A static, vanilla JavaScript single-page application that provides the user interface for the chat.
+
+This separation allows for independent development, scaling, and deployment of the backend and frontend.
+
+## Getting Started
+
+### Prerequisites
+- Python 3.8+
+- An Ollama server (or other LLM provider) running and accessible to the backend.
+
+### 1. Backend Setup
+First, set up and run the backend server.
+
+**a. Install dependencies:**
+Navigate to the project root and install the required Python packages from the `backend/requirements.txt` file. It's recommended to use a virtual environment.
+```bash
+# Create and activate a virtual environment (optional but recommended)
+python -m venv .venv
+source .venv/bin/activate
+
+# Install dependencies
+pip install -r backend/requirements.txt
+```
+
+**b. Configure the LLM:**
+Copy the `backend/config.example.json` to `backend/config.json` and edit it to point to your desired LLM model.
+```bash
+cp backend/config.example.json backend/config.json
+```
+Example `config.json`:
+```json
+{
+  "provider": "ollama",
+  "model_name": "gemma3:4b-it-qat",
+  "ollama": {
+    "host": "http://localhost:11434"
+  }
+}
+```
+If you are using HuggingFace, you also need to set the `HF_TOKEN` environment variable.
+
+**c. Run the backend server:**
+From the project root directory, run the `main.py` script using `uvicorn`.
+```bash
+uvicorn backend.main:app --host 0.0.0.0 --port 8000
+```
+The backend API is now running and accessible at `http://localhost:8000`.
+
+### 2. Frontend Setup
+In a **separate terminal**, navigate to the `frontend` directory and start a simple Python HTTP server to serve the static files.
+
+```bash
+cd frontend
+python -m http.server 8080
+```
+> **Note:** Any simple web server can be used. Python's built-in module is just a convenient option for local development.
+
+### 3. Access the Application
+Open your web browser and navigate to:
+**[http://localhost:8080](http://localhost:8080)**
+
+You can now interact with the QuestionnAIre chatbot.
 
 # What is it for?
 Patients often wait a lot of time in the waiting room in hospitals or privat practices. At the same time doctors dont have enough time for doing a thorough patient history. The patient could use the time waiting talking to an AI Chat bot which gives the doctor a summary of the most important facts before he sees the patient.

@@ -41,7 +41,7 @@
   - [x] 4.4 Binde die Funktionalität für den "Neustart"- und "Debug"-Button an die entsprechenden API-Aufrufe.
   - [x] 4.5 Übertrage die bestehenden CSS-Stile in eine separate `frontend/style.css`.
 
-- [ ] 5.0 Dokumentation und Abschluss
-  - [ ] 5.1 Aktualisiere die `README.md` mit klaren Anweisungen, wie man den Backend-Server und den Frontend-Server getrennt startet.
-  - [ ] 5.2 Führe End-to-End-Tests durch, um sicherzustellen, dass die Anwendung für den Endbenutzer genau wie zuvor funktioniert.
-  - [ ] 5.3 Entferne alle nicht mehr benötigten alten Dateien oder Code-Strukturen. 
+- [x] 5.0 Dokumentation und Abschluss
+  - [x] 5.1 Aktualisiere die `README.md` mit klaren Anweisungen, wie man den Backend-Server und den Frontend-Server getrennt startet.
+  - [x] 5.2 Führe End-to-End-Tests durch, um sicherzustellen, dass die Anwendung für den Endbenutzer genau wie zuvor funktioniert.
+  - [x] 5.3 Entferne alle nicht mehr benötigten alten Dateien oder Code-Strukturen.
