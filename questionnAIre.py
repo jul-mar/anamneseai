@@ -458,6 +458,7 @@ class UIComponents:
                 htmx.config.useTemplateFragments = true;
                 htmx.config.indicatorClass = 'htmx-indicator';
                 htmx.config.requestClass = 'htmx-request';
+                console.log('HTMX configured with indicator class:', htmx.config.indicatorClass);
             });
             """, type="text/javascript"),
         )
@@ -473,8 +474,6 @@ class UIComponents:
                 body { background-color: #f8fafc; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
                 ::-webkit-scrollbar { width: 8px; height: 8px; } ::-webkit-scrollbar-track { background: #f1f5f9; }
                 ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; } ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-                #loading-indicator { opacity: 0; transition: opacity 200ms ease-in; }
-                #loading-indicator.processing { opacity: 1 !important; } .htmx-request .htmx-indicator { opacity: 1 !important; }
             """),
         )
     
@@ -497,17 +496,6 @@ class UIComponents:
         attrs = {"id": "user-message-input", "type": "text", "name": "user_message", "placeholder": "Type your medical query...", "cls": "input bg-white border border-gray-300 focus:border-medical-blue focus:ring-2 focus:ring-medical-blue-light w-full flex-grow mr-2 rounded-lg", "autofocus": True}
         if disabled: attrs["disabled"], attrs["placeholder"] = True, "Conversation ended or bot is processing..."
         return Input(**attrs)
-    
-    @staticmethod
-    def loading_indicator():
-        # The indicator must be a direct child of the form and have the htmx-indicator class
-        return Div(
-            Div(_innerHTML="""<svg class=\"animate-spin h-5 w-5 mr-2\" xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 24 24\"><circle class=\"opacity-25\" cx=\"12\" cy=\"12\" r=\"10\" stroke=\"currentColor\" stroke-width=\"4\"></circle><path class=\"opacity-75\" fill=\"currentColor\" d=\"M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z\"></path></svg>""", cls="inline-block"),
-            Span("Processing...", cls="text-sm font-medium"),
-            id="loading-indicator",
-            cls="htmx-indicator flex items-center text-medical-blue ml-2",
-            style="opacity: 0; transition: opacity 200ms ease-in;"
-        )
     
     @staticmethod
     def submit_button(disabled=False): 
@@ -538,13 +526,10 @@ class UIComponents:
         chat_box = Div(*[UIComponents.chat_message(msg) for msg in messages], id="chat-box", cls=f"p-4 space-y-6 overflow-y-auto {chat_box_height} bg-white rounded-lg shadow-md border border-gray-200")
         form_is_disabled = bot_state in ["GENERATING_SUMMARY", "DONE", "WAITING_TO_ASK_PREDEFINED"] and not (debug_mode_enabled and bot_state == "WAITING_TO_ASK_PREDEFINED")
         chat_form_classes = "p-4 flex items-center bg-gray-50 rounded-lg shadow-sm mt-4 sticky bottom-0 border border-gray-200" + (" opacity-50" if form_is_disabled else "")
-        # Ensure the loading indicator is a direct child of the form and only use hx_indicator for reliable spinner
         chat_form = Form(
             UIComponents.input_field(disabled=form_is_disabled),
             UIComponents.submit_button(disabled=form_is_disabled),
-            UIComponents.loading_indicator(),
-            hx_post="/chat", hx_target="#chat-box", hx_swap="beforeend", hx_indicator="#loading-indicator",
-            # Remove hx_ext, data_loading_delay, data_loading_class, data_loading_target, data_loading_class_remove for reliability
+            hx_post="/chat", hx_target="#chat-box", hx_swap="beforeend",
             hx_on_htmx_after_on_load="this.closest('.container').querySelector('#chat-box').scrollTop = this.closest('.container').querySelector('#chat-box').scrollHeight; if(document.activeElement.tagName === 'BUTTON' && !document.getElementById('user-message-input').disabled) { document.getElementById('user-message-input').focus(); }",
             cls=chat_form_classes
         )
