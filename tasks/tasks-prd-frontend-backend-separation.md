@@ -14,19 +14,19 @@
 
 ## Aufgaben
 
-- [ ] 1.0 Projektstruktur und Backend-Grundgerüst einrichten
+- [x] 1.0 Projektstruktur und Backend-Grundgerüst einrichten
   - [x] 1.1 Erstelle die Hauptverzeichnisse: `backend/` und `frontend/`.
   - [x] 1.2 Verschiebe `questionnAIre.py`, `config.json`, `questions.json` und `requirements.txt` in das `backend/`-Verzeichnis.
   - [x] 1.3 Erstelle eine neue `backend/main.py`, die die `fasthtml`-App initialisiert.
   - [x] 1.4 Konfiguriere CORS in `backend/main.py`, um Anfragen vom Frontend zu erlauben (wird auf einem anderen Port laufen).
   - [x] 1.5 Erstelle eine einfache `frontend/index.html` als Platzhalter.
 
-- [ ] 2.0 API-Endpunkte im Backend implementieren
-  - [ ] 2.1 Erstelle einen `POST /api/session/start`-Endpunkt, der eine neue Chat-Sitzung initialisiert und die erste Begrüßungsnachricht zurückgibt.
-  - [ ] 2.2 Erstelle einen `POST /api/chat`-Endpunkt, der eine Benutzernachricht und eine Sitzungs-ID entgegennimmt und die Antwort des Bots zurückgibt.
-  - [ ] 2.3 Erstelle einen `POST /api/session/restart`-Endpunkt, um die Konversation neu zu starten.
-  - [ ] 2.4 Erstelle einen `POST /api/debug/toggle`-Endpunkt zum Umschalten des Debug-Modus.
-  - [ ] 2.5 Stelle sicher, dass alle Endpunkte JSON-Objekte zurückgeben und nicht HTML.
+- [x] 2.0 API-Endpunkte im Backend implementieren
+  - [x] 2.1 Erstelle einen `POST /api/session/start`-Endpunkt, der eine neue Chat-Sitzung initialisiert und die erste Begrüßungsnachricht zurückgibt.
+  - [x] 2.2 Erstelle einen `POST /api/chat`-Endpunkt, der eine Benutzernachricht und eine Sitzungs-ID entgegennimmt und die Antwort des Bots zurückgibt.
+  - [x] 2.3 Erstelle einen `POST /api/session/restart`-Endpunkt, um die Konversation neu zu starten.
+  - [x] 2.4 Erstelle einen `POST /api/debug/toggle`-Endpunkt zum Umschalten des Debug-Modus.
+  - [x] 2.5 Stelle sicher, dass alle Endpunkte JSON-Objekte zurückgeben und nicht HTML.
 
 - [ ] 3.0 Backend-Logik refaktorisieren und UI-Code entfernen
   - [ ] 3.1 Lösche die `UIComponents`-Klasse und alle ihre Aufrufe aus dem Backend-Code.
