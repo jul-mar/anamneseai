@@ -15,11 +15,11 @@
 ## Aufgaben
 
 - [ ] 1.0 Projektstruktur und Backend-Grundgerüst einrichten
-  - [ ] 1.1 Erstelle die Hauptverzeichnisse: `backend/` und `frontend/`.
-  - [ ] 1.2 Verschiebe `questionnAIre.py`, `config.json`, `questions.json` und `requirements.txt` in das `backend/`-Verzeichnis.
-  - [ ] 1.3 Erstelle eine neue `backend/main.py`, die die `fasthtml`-App initialisiert.
-  - [ ] 1.4 Konfiguriere CORS in `backend/main.py`, um Anfragen vom Frontend zu erlauben (wird auf einem anderen Port laufen).
-  - [ ] 1.5 Erstelle eine einfache `frontend/index.html` als Platzhalter.
+  - [x] 1.1 Erstelle die Hauptverzeichnisse: `backend/` und `frontend/`.
+  - [x] 1.2 Verschiebe `questionnAIre.py`, `config.json`, `questions.json` und `requirements.txt` in das `backend/`-Verzeichnis.
+  - [x] 1.3 Erstelle eine neue `backend/main.py`, die die `fasthtml`-App initialisiert.
+  - [x] 1.4 Konfiguriere CORS in `backend/main.py`, um Anfragen vom Frontend zu erlauben (wird auf einem anderen Port laufen).
+  - [x] 1.5 Erstelle eine einfache `frontend/index.html` als Platzhalter.
 
 - [ ] 2.0 API-Endpunkte im Backend implementieren
   - [ ] 2.1 Erstelle einen `POST /api/session/start`-Endpunkt, der eine neue Chat-Sitzung initialisiert und die erste Begrüßungsnachricht zurückgibt.

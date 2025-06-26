@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuestionnAIre</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-gray-100">
+
+    <div class="container mx-auto max-w-3xl p-4">
+        <h1 class="text-3xl font-bold text-center text-gray-800 my-4">QuestionnAIre</h1>
+        
+        <div id="chat-box" class="p-4 space-y-4 h-96 overflow-y-auto bg-white rounded-lg shadow-md border">
+            <!-- Chat-Nachrichten werden hier dynamisch eingefügt -->
+        </div>
+
+        <form id="chat-form" class="p-4 flex items-center bg-gray-50 rounded-lg shadow-sm mt-4">
+            <input type="text" id="user-message-input" name="user_message" placeholder="Ihre Antwort..." class="input bg-white border border-gray-300 w-full mr-2 rounded-lg p-2">
+            <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-lg">Senden</button>
+        </form>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html> 
