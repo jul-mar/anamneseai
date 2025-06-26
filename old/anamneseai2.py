@@ -11,7 +11,7 @@ import json # For parsing LLM's JSON output
 # QUESTION SETS DEFINITION (NEW)
 # -----------------------------------------------------------------------------
 QUESTION_SETS = {
-    "respiratory_assessment_v3": { # Corrected from previous version which still had sob_
+    "respiratory_assessment_v3": { 
         "name": "Respiratory Symptom Assessment (Free-Form with Criteria Guidance)",
         "description": "Standard questions for patients presenting with cough, sputum, or dyspnea. All answers are free-form text, guided by criteria for LLM interpretation.",
         "questions": [

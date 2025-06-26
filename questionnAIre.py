@@ -7,6 +7,12 @@ import os  # For creating session directory
 import shutil  # For removing session directory
 import json # For loading questions from JSON file
 from starlette.responses import RedirectResponse, Response # Ensure Response is imported
+from huggingface_hub import InferenceClient
+from abc import ABC, abstractmethod
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # -----------------------------------------------------------------------------
 # QUESTION SERVICE
@@ -103,10 +109,194 @@ class QuestionService:
         return question.get("criteria", []) if question else []
 
 # -----------------------------------------------------------------------------
+# LLM PROVIDERS
+# -----------------------------------------------------------------------------
+class LLMProvider(ABC):
+    """Abstract base class for LLM providers."""
+    
+    @abstractmethod
+    def chat(self, messages: list, **kwargs) -> str:
+        """Send messages to the LLM and return the response."""
+        pass
+    
+    @abstractmethod
+    def get_model_name(self) -> str:
+        """Get the model name being used."""
+        pass
+    
+    @abstractmethod
+    def is_available(self) -> bool:
+        """Check if the provider is available."""
+        pass
+
+class HuggingFaceProvider(LLMProvider):
+    """Provider for Hugging Face Inference API."""
+    
+    def __init__(self, model_name: str, config: dict):
+        self.model_name = model_name
+        self.config = config
+        self.client = None
+        self.hf_token = os.getenv("HF_TOKEN")
+        self.initialize_client()
+    
+    def initialize_client(self):
+        try:
+            if not self.hf_token:
+                print("Warning: HF_TOKEN environment variable not set. Using mock client.")
+                self.client = self._create_mock_client()
+                return
+                
+            self.client = InferenceClient(
+                model=self.model_name,
+                token=self.hf_token
+            )
+            print(f"Successfully initialized Hugging Face client with model: {self.model_name}")
+        except Exception as e:
+            print(f"Error initializing Hugging Face client: {e}. Using mock client.")
+            self.client = self._create_mock_client()
+    
+    def _create_mock_client(self):
+        class MockHFClient:
+            def chat_completion(self, messages, max_tokens=None, temperature=None):
+                print("--- Using Mock Hugging Face Client ---")
+                return type('obj', (object,), {
+                    'choices': [type('obj', (object,), {
+                        'message': type('obj', (object,), {
+                            'content': 'Mock response from Hugging Face. Please set HF_TOKEN environment variable.'
+                        })()
+                    })()]
+                })()
+        return MockHFClient()
+    
+    def chat(self, messages: list, **kwargs) -> str:
+        try:
+            # Convert messages to HuggingFace format
+            hf_messages = []
+            for msg in messages:
+                hf_messages.append({
+                    "role": msg["role"],
+                    "content": msg["content"]
+                })
+            
+            response = self.client.chat_completion(
+                messages=hf_messages,
+                max_tokens=self.config.get("max_tokens", 1000),
+                temperature=self.config.get("temperature", 0.7)
+            )
+            
+            return response.choices[0].message.content
+        except Exception as e:
+            print(f"Error in Hugging Face chat: {e}")
+            return "Sorry, there was an error communicating with the Hugging Face API."
+    
+    def get_model_name(self) -> str:
+        return self.model_name
+    
+    def is_available(self) -> bool:
+        return self.hf_token is not None
+
+class OllamaProvider(LLMProvider):
+    """Provider for Ollama API."""
+    
+    def __init__(self, model_name: str, config: dict):
+        self.model_name = model_name
+        self.config = config
+        self.host = config.get("host", "http://localhost:11434")
+        self.client = None
+        self.initialize_client()
+    
+    def initialize_client(self):
+        try:
+            print(f"Attempting to connect to Ollama at {self.host}")
+            self.client = ollama.Client(host=self.host)
+            models_response = self.client.list() 
+            models = models_response.get('models', []) if isinstance(models_response, dict) else []
+            available_models = [m.get('name', '') for m in models if isinstance(m, dict) and 'name' in m]
+            if self.model_name in available_models:
+                print(f"Successfully connected to Ollama. Using model: {self.model_name}")
+            else:
+                print(f"[ERROR] Model '{self.model_name}' not found in available models: {available_models}")
+        except Exception as e:
+            print(f"Error connecting to Ollama: {e}. Starting with mock client.")
+            self.client = self._create_mock_client()
+    
+    def _create_mock_client(self):
+        class MockOllamaClient:
+            _call_count = 0
+            
+            def list(self): return {'models': []}
+            
+            def chat(self, model, messages, format=None, options=None):
+                MockOllamaClient._call_count += 1
+                print("--- Using Mock Ollama Client ---")
+                
+                last_user_message_content = ""
+                if messages and messages[-1]['role'] == 'user':
+                    content = messages[-1]['content']
+                    if "The patient's latest answer to this question (or my follow-up) is: \"" in content:
+                        answer_part = content.split("The patient's latest answer to this question (or my follow-up) is: \"")[-1]
+                        if answer_part:
+                            last_user_message_content = answer_part.split("\"")[0]
+                
+                print(f"Mock client processing based on (extracted) user answer: '{last_user_message_content}' and call count {MockOllamaClient._call_count}")
+
+                if "The current predefined question is:" in messages[-1]['content']:
+                    if "sufficient" in last_user_message_content.lower() or \
+                       "yes" in last_user_message_content.lower() or \
+                       MockOllamaClient._call_count % 3 == 0 :
+                         print("Mock client: Simulating 'question_sufficiently_answered'")
+                         return {'message': {'content': '{ "action": "question_sufficiently_answered" }'}}
+                    else:
+                        print("Mock client: Simulating a follow-up question.")
+                        return {'message': {'content': f'Mocked follow-up based on "{last_user_message_content[:20]}...": Could you please clarify that a bit more for me?'}}
+                
+                if "Please provide a concise summary" in messages[-1]['content']:
+                    print("Mock client: Simulating summary generation.")
+                    return {'message': {'content': 'This is a mocked summary of the patient\'s answers, focusing on key details provided. (Mocked by LLMService)'}}
+
+                print("Mock client: Simulating a generic response or initial question asking.")
+                return {'message': {'content': 'What would you like to discuss next? (Mocked generic from LLMService)'}}
+        return MockOllamaClient()
+    
+    def chat(self, messages: list, **kwargs) -> str:
+        try:
+            print("\n----- SENDING PROMPT TO LLM -----")
+            print(f"Model: {self.model_name}")
+            for i, msg in enumerate(messages):
+                print(f"\n[Message {i}] Role: {msg['role']}")
+                content_to_log = msg['content']
+                print(f"Content: {content_to_log[:400]}..." if len(content_to_log) > 400 else f"Content: {content_to_log}")
+            print("----- END OF PROMPT -----\n")
+            
+            request_params = { "model": self.model_name, "messages": messages }
+            response = self.client.chat(**request_params)
+            response_content = response.get('message', {}).get('content', 'No response from AI')
+            
+            print(f"\n----- RECEIVED RESPONSE FROM LLM -----\nRaw Content: {response_content}\n-----------------------------------\n")
+            return response_content
+        except Exception as e:
+            print(f"Error in Ollama chat call: {e}")
+            return "Sorry, there was an error communicating with the AI."
+    
+    def get_model_name(self) -> str:
+        return self.model_name
+    
+    def is_available(self) -> bool:
+        return self.client is not None
+
+# -----------------------------------------------------------------------------
 # LLM SERVICE LAYER
 # -----------------------------------------------------------------------------
 class LLMService:
-    DEFAULT_HOST = "http://localhost:11434"
+    """
+    Service for interacting with LLMs through different providers.
+    
+    Args:
+        provider (str, optional): The LLM provider to use ("huggingface" or "ollama").
+        model_name (str, optional): The name of the model to use.
+        config (dict, optional): Provider-specific configuration.
+    """
+    DEFAULT_PROVIDER = "ollama"
     DEFAULT_MODEL = "gemma3:4b-it-qat"
     
     SYSTEM_PROMPT = """You are QuestionnAIre, a highly capable and empathetic AI medical assistant. Your primary role is to meticulously gather patient information by asking a series of predefined questions. You will be provided with one predefined question at a time, potentially with some criteria or examples for a good answer, and the patient's response to it.
@@ -145,100 +335,47 @@ Your core responsibilities are:
 You will be guided by the application on when to ask the *next* predefined question from the list. Your focus is on thoroughly completing the *current* one.
 """
 
-    def __init__(self, host=None, model_name=None):
-        self.host = host or self.DEFAULT_HOST
+    def __init__(self, provider=None, model_name=None, config=None):
+        self.provider_name = provider or self.DEFAULT_PROVIDER
         self.model_name = model_name or self.DEFAULT_MODEL
-        self.client = None
-        self.initialize_client()
+        self.config = config or {}
+        self.provider = None
+        self.initialize_provider()
     
-    def initialize_client(self):
+    def initialize_provider(self):
+        """Initialize the appropriate LLM provider based on configuration."""
         try:
-            print(f"Attempting to connect to Ollama at {self.host}")
-            self.client = ollama.Client(host=self.host)
-            models_response = self.client.list() 
-            models = models_response.get('models', []) if isinstance(models_response, dict) else []
-            available_models = [m.get('name', '') for m in models if isinstance(m, dict) and 'name' in m]
-            if self.model_name in available_models:
-                print(f"Successfully connected to Ollama. Using model: {self.model_name}")
+            if self.provider_name == "huggingface":
+                hf_config = self.config.get("huggingface", {})
+                self.provider = HuggingFaceProvider(self.model_name, hf_config)
+            elif self.provider_name == "ollama":
+                ollama_config = self.config.get("ollama", {"host": "http://localhost:11434"})
+                self.provider = OllamaProvider(self.model_name, ollama_config)
             else:
-                print(f"Warning: Model '{self.model_name}' not found in available models: {available_models}. Proceeding with '{self.model_name}' but it might fail if not pulled.")
+                print(f"Unknown provider: {self.provider_name}. Falling back to Ollama.")
+                ollama_config = self.config.get("ollama", {"host": "http://localhost:11434"})
+                self.provider = OllamaProvider(self.model_name, ollama_config)
+            
+            print(f"[Startup] LLMService initialized with provider: {self.provider_name}, model: {self.model_name}")
         except Exception as e:
-            print(f"Error connecting to Ollama: {e}. Starting with mock client.")
-            self.client = self._create_mock_client()
+            print(f"Error initializing provider: {e}. Using Ollama fallback.")
+            ollama_config = {"host": "http://localhost:11434"}
+            self.provider = OllamaProvider(self.DEFAULT_MODEL, ollama_config)
     
-    def _create_mock_client(self):
-        class MockOllamaClient:
-            _call_count = 0 # Class variable to alternate mock responses
-
-            def list(self): return {'models': []}
-            
-            def chat(self, model, messages, format=None, options=None):
-                MockOllamaClient._call_count += 1
-                print("\n--- Using Mock Ollama Client ---")
-                
-                last_user_message_content = ""
-                # Find the last message with role 'user' that contains the patient's answer
-                # This heuristic needs to be robust to the actual prompt structure
-                if messages and messages[-1]['role'] == 'user':
-                    content = messages[-1]['content']
-                    # Try to extract answer from the specific evaluation prompt structure
-                    if "The patient's latest answer to this question (or my follow-up) is: \"" in content:
-                        answer_part = content.split("The patient's latest answer to this question (or my follow-up) is: \"")[-1]
-                        if answer_part:
-                            last_user_message_content = answer_part.split("\"")[0]
-                
-                print(f"Mock client processing based on (extracted) user answer: '{last_user_message_content}' and call count {MockOllamaClient._call_count}")
-
-                # Simulate evaluation
-                if "The current predefined question is:" in messages[-1]['content']: # Heuristic for evaluation prompt
-                    if "sufficient" in last_user_message_content.lower() or \
-                       "yes" in last_user_message_content.lower() or \
-                       MockOllamaClient._call_count % 3 == 0 : # Mock sufficiency more often
-                         print("Mock client: Simulating 'question_sufficiently_answered'")
-                         return {'message': {'content': '{ "action": "question_sufficiently_answered" }'}}
-                    else:
-                        print("Mock client: Simulating a follow-up question.")
-                        return {'message': {'content': f'Mocked follow-up based on "{last_user_message_content[:20]}...": Could you please clarify that a bit more for me?'}}
-                
-                # Simulate summary generation
-                if "Please provide a concise summary" in messages[-1]['content']:
-                    print("Mock client: Simulating summary generation.")
-                    return {'message': {'content': 'This is a mocked summary of the patient\'s answers, focusing on key details provided. (Mocked by LLMService)'}}
-
-                # Simulate asking a question (if system prompt is about asking)
-                if "Please present the following question" in messages[-1]['content']: # This case is not used in current app logic
-                     question_to_ask = messages[-1]['content'].split(":")[-1].strip().replace("\"", "")
-                     print(f"Mock client: Simulating asking question: {question_to_ask}")
-                     return {'message': {'content': f'{question_to_ask} (Mocked presentation by LLMService)'}}
-
-                print("Mock client: Simulating a generic response or initial question asking.")
-                # If it's an initial prompt without specific instructions, it might be the first question.
-                # This part of mock is less critical as app asks first Q directly now.
-                return {'message': {'content': 'What would you like to discuss next? (Mocked generic from LLMService)'}}
-        return MockOllamaClient()
+    def get_model_name(self) -> str:
+        """Get the current model name."""
+        return self.provider.get_model_name() if self.provider else self.model_name
     
-    def get_model_name(self): return self.model_name
-    def get_system_prompt(self): return self.SYSTEM_PROMPT
+    def get_system_prompt(self) -> str:
+        """Get the system prompt."""
+        return self.SYSTEM_PROMPT
     
-    def chat(self, messages_for_llm): 
-        try:
-            print("\n----- SENDING PROMPT TO LLM -----")
-            print(f"Model: {self.model_name}")
-            for i, msg in enumerate(messages_for_llm):
-                print(f"\n[Message {i}] Role: {msg['role']}")
-                content_to_log = msg['content']
-                print(f"Content: {content_to_log[:400]}..." if len(content_to_log) > 400 else f"Content: {content_to_log}")
-            print("----- END OF PROMPT -----\n")
-            
-            request_params = { "model": self.model_name, "messages": messages_for_llm }
-            response = self.client.chat(**request_params)
-            response_content = response.get('message', {}).get('content', 'No response from AI')
-            
-            print(f"\n----- RECEIVED RESPONSE FROM LLM -----\nRaw Content: {response_content}\n-----------------------------------\n")
-            return response_content
-        except Exception as e:
-            print(f"Error in LLM chat call: {e}")
-            return "Sorry, there was an error communicating with the AI."
+    def chat(self, messages_for_llm: list) -> str:
+        """Send messages to the LLM and return the response."""
+        if not self.provider:
+            return "Error: No LLM provider available."
+        
+        return self.provider.chat(messages_for_llm)
 
 # -----------------------------------------------------------------------------
 # SESSION MANAGEMENT
@@ -350,7 +487,14 @@ class UIComponents:
     
     @staticmethod
     def loading_indicator():
-        return Div(Div(_innerHTML="""<svg class="animate-spin h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>""", cls="inline-block"), Span("Processing...", cls="text-sm font-medium"), id="loading-indicator", cls="htmx-indicator flex items-center text-medical-blue ml-2", style="opacity: 0; transition: opacity 200ms ease-in;")
+        # The indicator must be a direct child of the form and have the htmx-indicator class
+        return Div(
+            Div(_innerHTML="""<svg class=\"animate-spin h-5 w-5 mr-2\" xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 24 24\"><circle class=\"opacity-25\" cx=\"12\" cy=\"12\" r=\"10\" stroke=\"currentColor\" stroke-width=\"4\"></circle><path class=\"opacity-75\" fill=\"currentColor\" d=\"M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z\"></path></svg>""", cls="inline-block"),
+            Span("Processing...", cls="text-sm font-medium"),
+            id="loading-indicator",
+            cls="htmx-indicator flex items-center text-medical-blue ml-2",
+            style="opacity: 0; transition: opacity 200ms ease-in;"
+        )
     
     @staticmethod
     def submit_button(disabled=False): 
@@ -381,7 +525,16 @@ class UIComponents:
         chat_box = Div(*[UIComponents.chat_message(msg) for msg in messages], id="chat-box", cls=f"p-4 space-y-6 overflow-y-auto {chat_box_height} bg-white rounded-lg shadow-md border border-gray-200")
         form_is_disabled = bot_state in ["GENERATING_SUMMARY", "DONE", "WAITING_TO_ASK_PREDEFINED"] and not (debug_mode_enabled and bot_state == "WAITING_TO_ASK_PREDEFINED")
         chat_form_classes = "p-4 flex items-center bg-gray-50 rounded-lg shadow-sm mt-4 sticky bottom-0 border border-gray-200" + (" opacity-50" if form_is_disabled else "")
-        chat_form = Form(UIComponents.input_field(disabled=form_is_disabled), UIComponents.submit_button(disabled=form_is_disabled), UIComponents.loading_indicator(), hx_post="/chat", hx_target="#chat-box", hx_swap="beforeend", hx_indicator="#loading-indicator", hx_ext="loading-states", data_loading_delay="100", data_loading_class="processing", data_loading_target="#loading-indicator", data_loading_class_remove="", hx_on_htmx_after_on_load="this.closest('.container').querySelector('#chat-box').scrollTop = this.closest('.container').querySelector('#chat-box').scrollHeight; if(document.activeElement.tagName === 'BUTTON' && !document.getElementById('user-message-input').disabled) { document.getElementById('user-message-input').focus(); }", cls=chat_form_classes)
+        # Ensure the loading indicator is a direct child of the form and only use hx_indicator for reliable spinner
+        chat_form = Form(
+            UIComponents.input_field(disabled=form_is_disabled),
+            UIComponents.submit_button(disabled=form_is_disabled),
+            UIComponents.loading_indicator(),
+            hx_post="/chat", hx_target="#chat-box", hx_swap="beforeend", hx_indicator="#loading-indicator",
+            # Remove hx_ext, data_loading_delay, data_loading_class, data_loading_target, data_loading_class_remove for reliability
+            hx_on_htmx_after_on_load="this.closest('.container').querySelector('#chat-box').scrollTop = this.closest('.container').querySelector('#chat-box').scrollHeight; if(document.activeElement.tagName === 'BUTTON' && !document.getElementById('user-message-input').disabled) { document.getElementById('user-message-input').focus(); }",
+            cls=chat_form_classes
+        )
         controls_container = Div(Div(id="debug-action-area", cls="text-center mt-1 mb-1"), UIComponents.debug_status_indicator_and_toggle_button(debug_mode_enabled), UIComponents.restart_button(), cls="mt-1 space-y-2")
         return Div(UIComponents.header(model_name), chat_box, chat_form, controls_container, cls="container mx-auto max-w-3xl p-4 flex flex-col h-screen font-sans bg-gray-50")
     
@@ -392,7 +545,37 @@ class UIComponents:
 # MAIN APPLICATION
 # -----------------------------------------------------------------------------
 question_service = QuestionService() 
-llm_service = LLMService()
+
+# --- Load configuration from config.json ---
+def load_config():
+    """Load the complete configuration from config.json."""
+    try:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        config_path = os.path.join(base_dir, "config.json")
+        with open(config_path, "r") as f:
+            config = json.load(f)
+        return config
+    except Exception as e:
+        print(f"Error loading config.json: {e}. Using defaults.")
+        return {}
+
+def create_llm_service_from_config():
+    """Create LLMService instance from configuration."""
+    config = load_config()
+    
+    provider = config.get("provider", LLMService.DEFAULT_PROVIDER)
+    model_name = config.get("model_name", LLMService.DEFAULT_MODEL)
+    
+    # Extract provider-specific configs
+    provider_configs = {}
+    if "huggingface" in config:
+        provider_configs["huggingface"] = config["huggingface"]
+    if "ollama" in config:
+        provider_configs["ollama"] = config["ollama"]
+    
+    return LLMService(provider=provider, model_name=model_name, config=provider_configs)
+
+llm_service = create_llm_service_from_config()
 app = FastHTML(hdrs=UIComponents.get_headers())
 rt = app.route
 
@@ -669,7 +852,7 @@ async def restart_chat_session(session: dict):
 # -----------------------------------------------------------------------------
 if __name__ == "__main__":
     print(f"Starting QuestionnAIre Chatbot...")
-    print(f"LLM Service: Using model '{llm_service.get_model_name()}' on host '{llm_service.host}'")
+    print(f"LLM Service: Using provider '{llm_service.provider_name}' with model '{llm_service.get_model_name()}'")
     print(f"Question Service: Loaded {len(question_service.get_all_question_ids())} questions from '{question_service.filepath}'")
     if not question_service.get_all_question_ids(): print("Warning: No questions loaded.")
     else: print(f"First question ID: {question_service.get_first_question_id()}")

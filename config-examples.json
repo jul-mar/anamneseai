@@ -1,0 +1,49 @@
+{
+  "_comment": "Example configurations for different LLM providers",
+  
+  "huggingface_llama": {
+    "provider": "huggingface",
+    "model_name": "meta-llama/Llama-3.1-8B-Instruct",
+    "huggingface": {
+      "api_url": "https://api-inference.huggingface.co/models/",
+      "max_tokens": 1000,
+      "temperature": 0.7
+    }
+  },
+  
+  "huggingface_mistral": {
+    "provider": "huggingface", 
+    "model_name": "mistralai/Mistral-7B-Instruct-v0.3",
+    "huggingface": {
+      "api_url": "https://api-inference.huggingface.co/models/",
+      "max_tokens": 1000,
+      "temperature": 0.7
+    }
+  },
+  
+  "huggingface_gemma": {
+    "provider": "huggingface",
+    "model_name": "google/gemma-2-9b-it",
+    "huggingface": {
+      "api_url": "https://api-inference.huggingface.co/models/",
+      "max_tokens": 1000,
+      "temperature": 0.7
+    }
+  },
+  
+  "ollama_gemma": {
+    "provider": "ollama",
+    "model_name": "gemma3:4b-it-qat",
+    "ollama": {
+      "host": "http://localhost:11434"
+    }
+  },
+  
+  "ollama_llama": {
+    "provider": "ollama",
+    "model_name": "llama3.1:8b-instruct",
+    "ollama": {
+      "host": "http://localhost:11434"
+    }
+  }
+} 
