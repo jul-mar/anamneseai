@@ -59,7 +59,10 @@ class QuestionService:
                     continue
                 q_id = question_data["id"]
                 # Ensure criteria is always a list, even if missing or null in JSON
-                question_data["criteria"] = question_data.get("criteria", [])
+                criteria = question_data.get("criteria", [])
+                if not isinstance(criteria, list):
+                    criteria = []
+                question_data["criteria"] = criteria
                 self._questions_by_id[q_id] = question_data
                 self._ordered_ids.append(q_id)
             
@@ -170,6 +173,9 @@ class HuggingFaceProvider(LLMProvider):
     
     def chat(self, messages: list, **kwargs) -> str:
         try:
+            if self.client is None:
+                return "Error: Hugging Face client not initialized."
+            
             # Convert messages to HuggingFace format
             hf_messages = []
             for msg in messages:
@@ -184,7 +190,11 @@ class HuggingFaceProvider(LLMProvider):
                 temperature=self.config.get("temperature", 0.7)
             )
             
-            return response.choices[0].message.content
+            if hasattr(response, 'choices') and response.choices and hasattr(response.choices[0], 'message'):
+                content = response.choices[0].message.content
+                return content if content is not None else "Empty response from Hugging Face API."
+            else:
+                return "Invalid response format from Hugging Face API."
         except Exception as e:
             print(f"Error in Hugging Face chat: {e}")
             return "Sorry, there was an error communicating with the Hugging Face API."
@@ -260,6 +270,9 @@ class OllamaProvider(LLMProvider):
     
     def chat(self, messages: list, **kwargs) -> str:
         try:
+            if self.client is None:
+                return "Error: Ollama client not initialized."
+            
             print("\n----- SENDING PROMPT TO LLM -----")
             print(f"Model: {self.model_name}")
             for i, msg in enumerate(messages):
@@ -623,7 +636,7 @@ async def toggle_debug_mode(session: dict):
         pass 
     return tuple(components)
 
-async def handle_bot_turn(session: dict, user_message_content: str = None):
+async def handle_bot_turn(session: dict, user_message_content: str | None = None):
     MAX_FOLLOW_UPS = 3 # Define max follow-ups for a single predefined question
     components = []
     bot_state = session.get('bot_state', "INIT")
