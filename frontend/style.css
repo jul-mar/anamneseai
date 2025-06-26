@@ -14,6 +14,21 @@
     background: #94a3b8; /* Corresponds to gray-400 */
 }
 
+/* Custom Medical Color Palette */
+.bg-primary { background-color: #3A6EA5; } /* Calming, professional blue */
+.text-primary-content { color: #ffffff; }
+.hover\:bg-primary-dark:hover { background-color: #2c5784; } /* A slightly darker blue for hover */
+
+.bg-secondary { background-color: #EBF0F6; } /* Very light, neutral grey for assistant messages */
+.text-secondary-content { color: #1f2937; }
+
+.bg-page { background-color: #ffffff; } /* Pure white page background */
+.bg-content { background-color: #ffffff; } /* Content elements background */
+
+.border-base { border-color: #E5E7EB; }
+.text-neutral { color: #3d4451; }
+.text-neutral-muted { color: #6b7280; }
+
 /* Add any other custom styles here */
 body {
     /* The font is now primarily handled by DaisyUI, but this ensures a nice fallback */

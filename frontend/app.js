@@ -82,80 +82,79 @@ document.addEventListener('DOMContentLoaded', () => {
         const isUser = message.role === 'user';
         const chatAlignment = isUser ? 'chat-end' : 'chat-start';
         
-        let bubbleColor;
+        // Use our custom classes defined in style.css
+        let bubbleClasses = 'chat-bubble';
         if (message.role === 'error') {
-            bubbleColor = 'chat-bubble-error';
+            bubbleClasses += ' bg-red-100 text-red-700'; // Using Tailwind defaults for error
         } else if (isUser) {
-            bubbleColor = 'chat-bubble-primary';
+            bubbleClasses += ' bg-primary text-primary-content';
         } else {
-            bubbleColor = 'chat-bubble-secondary';
+            bubbleClasses += ' bg-secondary text-secondary-content';
         }
 
         const avatarInitial = isUser ? 'P' : 'A';
-        const avatarClass = isUser ? 'bg-primary text-primary-content' : 'bg-secondary text-secondary-content';
+        const avatarClasses = isUser ? 'bg-primary text-primary-content' : 'bg-gray-300 text-black';
 
         const messageDiv = document.createElement('div');
         messageDiv.className = `chat ${chatAlignment}`;
         messageDiv.innerHTML = `
             <div class="chat-image avatar placeholder">
-                <div class="w-10 rounded-full ${avatarClass}">
+                <div class="w-10 rounded-full font-semibold ${avatarClasses}">
                     <span>${avatarInitial}</span>
                 </div>
             </div>
-            <div class="chat-header text-xs opacity-70">
+            <div class="chat-header text-xs text-neutral-muted mb-1">
                 ${message.role.charAt(0).toUpperCase() + message.role.slice(1)}
             </div>
-            <div class="chat-bubble ${bubbleColor} whitespace-pre-wrap break-words">${message.content}</div>
+            <div class="${bubbleClasses} whitespace-pre-wrap break-words shadow-sm">${message.content}</div>
         `;
         return messageDiv;
     }
 
     function render() {
-        // Clear chatbox
+        // Clear chatbox and render messages
         chatBox.innerHTML = '';
-
-        // Render messages
         state.messages.forEach(msg => {
             chatBox.appendChild(renderMessage(msg));
         });
-
-        // Scroll to bottom
         chatBox.scrollTop = chatBox.scrollHeight;
         
         // Update debug toggle state
         debugToggle.checked = state.debugMode;
 
-        // Enable/disable form based on bot state
+        // --- Form & Button State Control ---
         const isWaitingForUser = state.botState === 'EXPECTING_USER_ANSWER';
         const formDisabled = state.isLoading || !isWaitingForUser;
         
         messageInput.disabled = formDisabled;
         sendButton.disabled = formDisabled;
 
-        if(formDisabled) {
+        if (formDisabled) {
+            messageInput.classList.remove('bg-gray-100');
+            messageInput.classList.add('bg-gray-200', 'opacity-70');
             messageInput.placeholder = 'Bitte warten...';
         } else {
+            messageInput.classList.remove('bg-gray-200', 'opacity-70');
+            messageInput.classList.add('bg-gray-100');
             messageInput.placeholder = 'Ihre Antwort...';
             messageInput.focus();
+        }
+
+        // --- Loading Indicators Control ---
+        if (state.isLoading) {
+            sendButton.classList.add('loading');
+            statusIndicator.textContent = 'lädt...';
+            statusIndicator.className = 'ml-2 font-mono badge badge-outline badge-info';
+        } else {
+            sendButton.classList.remove('loading');
+            statusIndicator.textContent = 'bereit';
+            statusIndicator.className = 'ml-2 font-mono badge badge-outline badge-success';
         }
     }
 
     function setLoading(isLoading) {
         state.isLoading = isLoading;
-        if (isLoading) {
-            statusIndicator.textContent = 'lädt...';
-            statusIndicator.classList.remove('badge-success', 'badge-error');
-            statusIndicator.classList.add('badge-info');
-            sendButton.classList.add('loading');
-            messageInput.disabled = true;
-        } else {
-            statusIndicator.textContent = 'bereit';
-            statusIndicator.classList.remove('badge-info');
-            statusIndicator.classList.add('badge-success');
-            sendButton.classList.remove('loading');
-            // Re-enable based on bot state, which will be handled by render()
-            // messageInput.disabled = false; 
-        }
+        render(); // The render function is now the single source of truth for UI state
     }
 
     function renderError(errorMessage) {
@@ -166,6 +165,10 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         state.messages.push(errorMsg);
         render(); // Re-render to show the error message
+
+        // Also update status indicator immediately for clarity
+        statusIndicator.textContent = 'Fehler';
+        statusIndicator.className = 'ml-2 font-mono badge badge-outline badge-error';
     }
 
     function updateState(apiResponse) {

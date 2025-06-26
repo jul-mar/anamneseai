@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="de" data-theme="light">
+<html lang="de">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,46 +8,46 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="style.css">
 </head>
-<body class="bg-base-200">
-    <div class="container mx-auto max-w-3xl p-4 flex flex-col h-screen">
+<body class="bg-page text-neutral antialiased">
+    <div class="container mx-auto max-w-3xl p-4 flex flex-col h-screen font-sans">
         
-        <header class="bg-base-100 rounded-lg shadow p-4 mb-4 border border-base-300">
+        <header class="bg-content rounded-lg shadow-md p-4 mb-4 border border-base">
             <div class="flex items-center mb-2">
-                <div class="mr-3">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                <div class="mr-3 text-[#3A6EA5]">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                 </div>
                 <div class="flex flex-col">
-                    <h1 class="text-2xl font-bold text-base-content">QuestionnAIre</h1>
-                    <p class="text-sm text-base-content/70">Patienten-Anamnese Chatbot</p>
+                    <h1 class="text-2xl font-bold text-neutral">QuestionnAIre</h1>
+                    <p class="text-sm text-neutral-muted">Patienten-Anamnese Chatbot</p>
                 </div>
             </div>
-            <div class="w-full h-px bg-base-300 mb-4"></div>
-            <div class="flex items-center justify-between text-xs text-base-content/70">
+            <div class="w-full h-px bg-gray-200 mb-4"></div>
+            <div class="flex items-center justify-between text-xs text-neutral-muted">
                 <div class="flex items-center">
                     <span>Status:</span>
                     <span id="status-indicator" class="ml-2 font-mono badge badge-outline badge-success">bereit</span>
                 </div>
-                <div id="model-name-container">
+                <div id="model-name-container" class="font-mono">
                     <!-- Model name will be inserted here by JS -->
                 </div>
             </div>
         </header>
 
-        <main id="chat-box" class="flex-grow p-4 space-y-6 overflow-y-auto bg-base-100 rounded-lg shadow border border-base-300">
+        <main id="chat-box" class="flex-grow p-4 space-y-6 overflow-y-auto bg-content rounded-lg shadow-inner border border-base">
             <!-- Chat messages will be appended here -->
         </main>
         
         <footer class="mt-4">
-            <form id="chat-form" class="p-4 flex items-center bg-base-100 rounded-lg shadow border border-base-300">
-                <input id="user-message-input" type="text" placeholder="Ihre Antwort..." class="input bg-base-200 focus:border-primary focus:ring-2 focus:ring-primary/50 w-full flex-grow mr-2 rounded-lg" autocomplete="off" autofocus>
-                <button id="send-button" type="submit" class="btn btn-primary">
+            <form id="chat-form" class="p-4 flex items-center bg-content rounded-lg shadow-md border border-base">
+                <input id="user-message-input" type="text" placeholder="Ihre Antwort..." class="input focus:border-[#3A6EA5] focus:ring-1 focus:ring-[#3A6EA5]/50 w-full flex-grow mr-3 rounded-lg" autocomplete="off" autofocus>
+                <button id="send-button" type="submit" class="btn bg-primary text-primary-content border-none hover:bg-primary-dark shadow-sm hover:shadow-lg transition-all">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
                 </button>
             </form>
-            <div class="flex justify-between items-center mt-2 px-1">
+            <div class="flex justify-between items-center mt-2 px-1 pt-1">
                  <div class="form-control">
                     <label class="label cursor-pointer p-0">
-                      <span class="label-text mr-2 text-sm">Debug Modus</span> 
+                      <span class="label-text mr-2 text-sm text-neutral-muted">Debug Modus</span> 
                       <input type="checkbox" id="debug-toggle" class="toggle toggle-sm toggle-primary"/>
                     </label>
                   </div>
