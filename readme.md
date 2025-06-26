@@ -50,7 +50,7 @@ If you are using HuggingFace, you also need to set the `HF_TOKEN` environment va
 **c. Run the backend server:**
 From the project root directory, run the `main.py` script using `uvicorn`.
 ```bash
-uvicorn backend.main:app --host 0.0.0.0 --port 8000
+uvicorn backend.main:app --hot 0.0.0.0 --port 8000
 ```
 The backend API is now running and accessible at `http://localhost:8000`.
 

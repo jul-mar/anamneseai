@@ -12,9 +12,15 @@ app = FastAPI()
 sessions = {}
 
 # CORS (Cross-Origin Resource Sharing)
+# Allow requests from our frontend development server
+origins = [
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],  # Allows all methods
     allow_headers=["*"],  # Allows all headers
