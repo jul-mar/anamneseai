@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const restartButton = document.getElementById('restart-button');
     const debugToggle = document.getElementById('debug-toggle');
     const statusIndicator = document.getElementById('status-indicator');
+    const modelNameContainer = document.getElementById('model-name-container');
 
     // Application State
     const state = {
@@ -17,6 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
         botState: 'INIT',
         debugMode: false,
         isLoading: false,
+        modelName: 'lädt...'
     };
 
     /**
@@ -122,6 +124,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // Update debug toggle state
         debugToggle.checked = state.debugMode;
 
+        // Display the model name
+        modelNameContainer.textContent = `Modell: ${state.modelName}`;
+
         // --- Form & Button State Control ---
         const isWaitingForUser = state.botState === 'EXPECTING_USER_ANSWER';
         const formDisabled = state.isLoading || !isWaitingForUser;
@@ -172,6 +177,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateState(apiResponse) {
+        console.log("Received data from backend:", apiResponse); // DEBUG: Log the entire response
         if (!apiResponse) return;
         
         if (apiResponse.chat_messages) {
@@ -183,6 +189,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (typeof apiResponse.debug_mode === 'boolean') {
             state.debugMode = apiResponse.debug_mode;
             debugToggle.checked = apiResponse.debug_mode;
+        }
+        if (apiResponse.model_name) {
+            state.modelName = apiResponse.model_name;
         }
 
         render();

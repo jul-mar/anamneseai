@@ -3,7 +3,7 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
-from backend.core import SessionManager, handle_bot_turn, _trigger_initial_bot_action, question_service
+from backend.core import SessionManager, handle_bot_turn, _trigger_initial_bot_action, question_service, llm_service
 
 app = FastAPI()
 
@@ -51,7 +51,8 @@ async def start_session(request: Request):
     response_data = {
         "chat_messages": session.get('chat_messages', []),
         "bot_state": session.get('bot_state'),
-        "debug_mode": session.get('debug_mode_enabled')
+        "debug_mode": session.get('debug_mode_enabled'),
+        "model_name": llm_service.get_model_name()
     }
     response = JSONResponse(content=response_data)
     save_session(session, response)
