@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const debugToggle = document.getElementById('debug-toggle');
     const statusIndicator = document.getElementById('status-indicator');
     const modelNameContainer = document.getElementById('model-name-container');
+    const debugControls = document.getElementById('debug-controls');
 
     // Application State
     const state = {
@@ -36,6 +37,9 @@ document.addEventListener('DOMContentLoaded', () => {
         },
         async toggleDebug() {
             return await _fetch('/debug/toggle', 'POST');
+        },
+        async continueDebugStep() {
+            return await _fetch('/debug/continue', 'POST');
         }
     };
 
@@ -143,6 +147,23 @@ document.addEventListener('DOMContentLoaded', () => {
             messageInput.classList.add('bg-gray-100');
             messageInput.placeholder = 'Ihre Antwort...';
             messageInput.focus();
+        }
+
+        // --- Debug Controls ---
+        debugControls.innerHTML = ''; // Clear previous button
+        const isPausedInDebug = state.debugMode && !isWaitingForUser && state.botState !== 'DONE' && state.botState !== 'INIT';
+
+        if (isPausedInDebug) {
+            const continueButton = document.createElement('button');
+            continueButton.id = 'continue-button';
+            continueButton.className = 'btn btn-sm btn-accent';
+            continueButton.textContent = `Nächster Schritt (Status: ${state.botState})`;
+            continueButton.onclick = async () => {
+                if (state.isLoading) return;
+                const response = await api.continueDebugStep();
+                updateState(response);
+            };
+            debugControls.appendChild(continueButton);
         }
 
         // --- Loading Indicators Control ---

@@ -130,5 +130,23 @@ async def toggle_debug(request: Request):
     save_session(session, response)
     return response
 
+@app.post("/api/debug/continue")
+async def debug_continue(request: Request):
+    session = get_session(request)
+    if not session:
+        raise HTTPException(status_code=400, detail="Session not started.")
+    
+    # Trigger the next bot turn without any user input
+    await handle_bot_turn(session, user_message_content=None)
+
+    response_data = {
+        "chat_messages": session.get('chat_messages', []),
+        "bot_state": session.get('bot_state'),
+        "debug_mode": session.get('debug_mode_enabled')
+    }
+    response = JSONResponse(content=response_data)
+    save_session(session, response)
+    return response
+
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000) 
