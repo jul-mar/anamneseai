@@ -3,13 +3,18 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
-from backend.core import SessionManager, handle_bot_turn, _trigger_initial_bot_action, question_service, llm_service
+import uuid
+from typing import List, Dict, Any, Union
+
+from backend.graph import anamnesis_graph
+from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
+from langchain_core.runnables import RunnableConfig
 
 app = FastAPI()
 
 # Global dictionary to store session data in memory
 # Key: session_id (str), Value: session_data (dict)
-sessions = {}
+sessions: Dict[str, Dict[str, Any]] = {}
 
 # CORS (Cross-Origin Resource Sharing)
 # Allow requests from our frontend development server
@@ -26,11 +31,25 @@ app.add_middleware(
     allow_headers=["*"],  # Allows all headers
 )
 
-def get_session(request: Request):
+def _serialize_messages(messages: List[BaseMessage]) -> List[Dict[str, Any]]:
+    """Serializes a list of LangChain message objects to a list of dicts."""
+    return [
+        {"role": msg.type, "content": msg.content}
+        for msg in messages
+    ]
+
+def get_session(request: Request) -> Dict[str, Any]:
     session_id = request.cookies.get("session_id")
     if session_id and session_id in sessions:
         return sessions[session_id]
-    return {}
+    # Create a new session if one doesn't exist
+    new_session_id = str(uuid.uuid4())
+    sessions[new_session_id] = {
+        "session_id": new_session_id,
+        "messages": [],
+        "debug_mode_enabled": False, # Standardmäßig deaktiviert
+    }
+    return sessions[new_session_id]
 
 def save_session(session: dict, response: JSONResponse):
     if "session_id" in session:
@@ -41,18 +60,28 @@ def save_session(session: dict, response: JSONResponse):
 @app.post("/api/session/start")
 async def start_session(request: Request):
     session = get_session(request)
-    SessionManager.initialize_session(session)
-    await _trigger_initial_bot_action(session)
+    session_id = session["session_id"]
     
-    # In non-debug mode, the bot should immediately ask the first question
-    if not session.get('debug_mode_enabled', False):
-        await handle_bot_turn(session)
+    # Konfiguration für den Graphen-Lauf
+    config: RunnableConfig = {"configurable": {"thread_id": session_id}}
+
+    # Wenn die Session neu ist (keine Nachrichten), starte den Graphen
+    if not session["messages"]:
+        initial_message = HumanMessage(content="Beginne die Anamnese.")
+        
+        # Lege fest, ob der Graph pausieren soll
+        interrupt_before = "*" if session.get('debug_mode_enabled', False) else None
+
+        graph_response = anamnesis_graph.invoke(
+            {"messages": [initial_message]}, 
+            config=config,
+            interrupt_before=interrupt_before
+        )
+        session["messages"] = graph_response["messages"]
 
     response_data = {
-        "chat_messages": session.get('chat_messages', []),
-        "bot_state": session.get('bot_state'),
-        "debug_mode": session.get('debug_mode_enabled'),
-        "model_name": llm_service.get_model_name()
+        "chat_messages": _serialize_messages(session.get('messages', [])),
+        "debug_mode": session.get('debug_mode_enabled', False),
     }
     response = JSONResponse(content=response_data)
     save_session(session, response)
@@ -61,24 +90,38 @@ async def start_session(request: Request):
 @app.post("/api/chat")
 async def chat(request: Request):
     session = get_session(request)
+    session_id = session["session_id"]
     if not session:
+        # This case should technically not be reached due to get_session creating one
         raise HTTPException(status_code=400, detail="Session not started.")
 
     data = await request.json()
-    user_message = data.get("message")
+    user_message_content = data.get("message")
 
-    if not user_message:
+    if not user_message_content:
         raise HTTPException(status_code=422, detail="Message cannot be empty.")
 
+    # Konfiguration für den Graphen-Lauf
+    config: RunnableConfig = {"configurable": {"thread_id": session_id}}
+
     # Add user message to chat history
-    SessionManager.add_message_to_display_chat(session, 'user', user_message)
+    session["messages"].append(HumanMessage(content=user_message_content))
     
-    # Let the bot handle the turn
-    await handle_bot_turn(session, user_message_content=user_message)
+    # Lege fest, ob der Graph pausieren soll
+    interrupt_before = "*" if session.get('debug_mode_enabled', False) else None
+    
+    # Let the graph handle the turn
+    graph_response = anamnesis_graph.invoke(
+        {"messages": session["messages"]},
+        config=config,
+        interrupt_before=interrupt_before
+    )
+    
+    # Add AI response to history
+    session["messages"] = graph_response["messages"]
 
     response_data = {
-        "chat_messages": session.get('chat_messages', []),
-        "bot_state": session.get('bot_state'),
+        "chat_messages": _serialize_messages(session.get('messages', [])),
     }
     response = JSONResponse(content=response_data)
     save_session(session, response)
@@ -88,20 +131,27 @@ async def chat(request: Request):
 async def restart_session(request: Request):
     session = get_session(request)
     session_id = session.get("session_id")
+    
+    # Clear old session data
     if session_id and session_id in sessions:
         del sessions[session_id]
     
-    # Start a new session
-    new_session = {}
-    SessionManager.initialize_session(new_session)
-    await _trigger_initial_bot_action(new_session)
-    if not new_session.get('debug_mode_enabled', False):
-        await handle_bot_turn(new_session)
+    # Start a new session by creating a new empty session
+    # and then letting the start_session logic handle the initialization
+    new_session = get_session(request) # This will create a new one
+    session_id = new_session["session_id"]
+    config: RunnableConfig = {"configurable": {"thread_id": session_id}}
+    
+    initial_message = HumanMessage(content="Beginne die Anamnese.")
+    graph_response = anamnesis_graph.invoke(
+        {"messages": [initial_message]},
+        config=config
+    )
+    new_session["messages"] = graph_response["messages"]
 
     response_data = {
-        "chat_messages": new_session.get('chat_messages', []),
-        "bot_state": new_session.get('bot_state'),
-        "debug_mode": new_session.get('debug_mode_enabled')
+        "chat_messages": _serialize_messages(new_session.get('messages', [])),
+        "debug_mode": new_session.get('debug_mode_enabled', False),
     }
     response = JSONResponse(content=response_data)
     save_session(new_session, response)
@@ -115,15 +165,7 @@ async def toggle_debug(request: Request):
     
     session['debug_mode_enabled'] = not session.get('debug_mode_enabled', False)
     
-    # If debug mode was just turned OFF, and the bot is in a waiting state, proceed
-    if not session['debug_mode_enabled']:
-        bot_state = session.get('bot_state')
-        if bot_state in ["WAITING_TO_ASK_PREDEFINED", "EVALUATING_ANSWER", "GENERATING_SUMMARY"]:
-            await handle_bot_turn(session)
-
     response_data = {
-        "chat_messages": session.get('chat_messages', []),
-        "bot_state": session.get('bot_state'),
         "debug_mode": session.get('debug_mode_enabled')
     }
     response = JSONResponse(content=response_data)
@@ -133,15 +175,19 @@ async def toggle_debug(request: Request):
 @app.post("/api/debug/continue")
 async def debug_continue(request: Request):
     session = get_session(request)
+    session_id = session["session_id"]
     if not session:
         raise HTTPException(status_code=400, detail="Session not started.")
     
-    # Trigger the next bot turn without any user input
-    await handle_bot_turn(session, user_message_content=None)
+    # Konfiguration, um den Graphen fortzusetzen
+    config: RunnableConfig = {"configurable": {"thread_id": session_id}}
+
+    # Trigger the next graph turn by invoking with no new messages
+    graph_response = anamnesis_graph.invoke({"messages": []}, config=config)
+    session["messages"] = graph_response["messages"]
 
     response_data = {
-        "chat_messages": session.get('chat_messages', []),
-        "bot_state": session.get('bot_state'),
+        "chat_messages": _serialize_messages(session.get('messages', [])),
         "debug_mode": session.get('debug_mode_enabled')
     }
     response = JSONResponse(content=response_data)

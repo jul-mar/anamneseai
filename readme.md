@@ -1,20 +1,20 @@
 # QuestionnAIre - AI Patient History Chatbot
 
 ## What is it?
-A sophisticated chatbot designed to interview patients and gather their medical history prior to a doctor's appointment. The application uses a Large Language Model (LLM) to ask a series of predefined questions, evaluate the patient's answers for completeness, and ask clarifying follow-up questions when necessary.
+A sophisticated chatbot designed to interview patients and gather their medical history prior to a doctor's appointment. The application uses **LangGraph** to create a flexible, stateful graph that orchestrates the conversation flow. This allows for a more dynamic and robust interaction compared to a linear script.
 
 ## Architecture
-The application is now split into two main components:
-- **Backend**: A Python-based [FastAPI](https://fastapi.tiangolo.com/) server that handles all the core logic, including chat state management, interaction with the LLM, and serving the API.
+The application is split into two main components:
+- **Backend**: A Python-based [FastAPI](https://fastapi.tiangolo.com/) server that handles the core logic. It now uses LangGraph to manage the chat state and conversation flow.
 - **Frontend**: A static, vanilla JavaScript single-page application that provides the user interface for the chat.
 
-This separation allows for independent development, scaling, and deployment of the backend and frontend.
+The core of the backend is the `anamnesis_graph` defined in `backend/graph.py`. This graph defines the nodes (steps in the conversation) and edges (logic for moving between steps). The session management in `backend/main.py` now stores the state of this graph for each user.
 
 ## Getting Started
 
 ### Prerequisites
 - Python 3.8+
-- An Ollama server (or other LLM provider) running and accessible to the backend.
+- A Hugging Face account and an API Token.
 
 ### 1. Backend Setup
 First, set up and run the backend server.
@@ -30,29 +30,24 @@ source .venv/bin/activate
 pip install -r backend/requirements.txt
 ```
 
-**b. Configure the LLM:**
-Copy the `backend/config.example.json` to `backend/config.json` and edit it to point to your desired LLM model.
+**b. Configure Environment Variables:**
+The backend requires a Hugging Face API token to access the LLM. Create a `.env` file in the project root directory and add your token:
 ```bash
-cp backend/config.example.json backend/config.json
+# In your project root, create a .env file
+touch .env
 ```
-Example `config.json`:
-```json
-{
-  "provider": "ollama",
-  "model_name": "gemma3:4b-it-qat",
-  "ollama": {
-    "host": "http://localhost:11434"
-  }
-}
+Add the following line to the `.env` file:
 ```
-If you are using HuggingFace, you also need to set the `HF_TOKEN` environment variable.
+HF_TOKEN="your_hugging_face_api_token_here"
+```
+The application uses the `mistralai/Mistral-7B-Instruct-v0.3` model by default. You can change this directly in `backend/graph.py` if needed.
 
 **c. Run the backend server:**
 From the project root directory, run the `main.py` script using `uvicorn`.
 ```bash
-uvicorn backend.main:app --host 0.0.0.0 --port 8000
+uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
 ```
-The backend API is now running and accessible at `http://localhost:8000`.
+The `--reload` flag is optional but helpful for development. The backend API is now running and accessible at `http://localhost:8000`.
 
 ### 2. Frontend Setup
 In a **separate terminal**, navigate to the `frontend` directory and start a simple Python HTTP server to serve the static files.
@@ -69,18 +64,22 @@ Open your web browser and navigate to:
 
 You can now interact with the QuestionnAIre chatbot.
 
+## Debug Mode
+The application includes a debug mode that allows you to step through the conversation graph.
+- **Toggle Debug Mode:** Send a POST request to `/api/debug/toggle`.
+- **Continue to next step:** When paused in debug mode, send a POST request to `/api/debug/continue` to advance the conversation.
+
 # What is it for?
 Patients often wait a lot of time in the waiting room in hospitals or privat practices. At the same time doctors dont have enough time for doing a thorough patient history. The patient could use the time waiting talking to an AI Chat bot which gives the doctor a summary of the most important facts before he sees the patient.
 
 # MVP to dos
 - building a Chat interface (done)
-- giving the Chatbot memory
+- giving the Chatbot memory (done with LangGraph)
 - introduction 
-- one example question
-- AI has to collect all the answers
+- one example question (done)
+- AI has to collect all the answers (done)
 - verification of the answers
 - create a summary of the answers when all questions are answered
-
 
 # Plan:
 - implement LLM checking if the answer satisfies the critiria
