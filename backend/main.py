@@ -36,10 +36,13 @@ app.add_middleware(
 
 def _serialize_messages(messages: List[BaseMessage]) -> List[Dict[str, Any]]:
     """Serializes a list of LangChain message objects to a list of dicts."""
-    return [
-        {"role": msg.type, "content": msg.content}
-        for msg in messages
-    ]
+    serialized = []
+    for msg in messages:
+        role = msg.type
+        if role == 'human':
+            role = 'user'  # Konvertiere 'human' zu 'user' für das Frontend
+        serialized.append({"role": role, "content": msg.content})
+    return serialized
 
 def _determine_bot_state(messages: List[BaseMessage]) -> str:
     """Bestimmt den Bot-Status basierend auf dem Gesprächsstand."""
