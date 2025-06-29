@@ -10,6 +10,12 @@ from langchain_core.prompts import ChatPromptTemplate
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 
+def load_prompt(file_name: str) -> str:
+    """Lädt einen Prompt aus dem prompts-Verzeichnis."""
+    prompt_path = os.path.join(os.path.dirname(__file__), 'prompts', file_name)
+    with open(prompt_path, 'r') as f:
+        return f.read().strip()
+
 load_dotenv()
 
 class GraphState(TypedDict):
@@ -59,10 +65,13 @@ def create_anamnesis_graph():
     # Wickle den LLM in ein Chat-Modell ein
     model = ChatHuggingFace(llm=llm)
 
+    # Lade den System-Prompt aus der Datei
+    system_prompt = load_prompt("system_prompt.txt")
+
     # Definiere eine Prompt-Vorlage für die Generierung der Frage
     prompt = ChatPromptTemplate.from_messages(
         [
-            ("system", "Du bist ein medizinischer Assistent. Deine Aufgabe ist es, eine Anamnese durchzuführen. Stelle dem Benutzer relevante Fragen zu seinem Gesundheitszustand. Halte deine Fragen kurz und prägnant."),
+            ("system", system_prompt),
             ("human", "{user_input}"),
         ]
     )
