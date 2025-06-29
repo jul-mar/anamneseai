@@ -1,4 +1,5 @@
 import os
+import json
 from typing import TypedDict, Annotated
 import operator
 
@@ -20,6 +21,16 @@ class GraphState(TypedDict):
     """
     messages: Annotated[list[AnyMessage], operator.add]
 
+def load_config():
+    """Lädt die Konfiguration aus der config.json-Datei."""
+    config_path = os.path.join(os.path.dirname(__file__), '..', 'config.json')
+    if not os.path.exists(config_path):
+        # Fallback auf backend/config.json wenn die obige Konstruktion fehlschlägt
+        config_path = os.path.join(os.path.dirname(__file__), 'config.json')
+
+    with open(config_path, 'r') as f:
+        return json.load(f)
+
 def create_anamnesis_graph():
     """
     Erstellt und kompiliert den LangGraph-Graphen für die Anamnese.
@@ -31,11 +42,18 @@ def create_anamnesis_graph():
     if not hf_token:
         raise ValueError("HF_TOKEN not found in environment variables.")
 
+    # Lade die Konfiguration
+    config = load_config()
+    model_name = config.get("model_name", "meta-llama/Llama-3.1-8B-Instruct")
+    hf_config = config.get("huggingface", {})
+    
     # Erstelle zuerst den Endpoint
-    llm = HuggingFaceEndpoint(
-        repo_id="mistralai/Mistral-7B-Instruct-v0.3",
+    llm = HuggingFaceEndpoint(  # type: ignore[arg-type]
+        repo_id=model_name,
         huggingfacehub_api_token=hf_token,
         task="text-generation",
+        max_new_tokens=hf_config.get("max_tokens", 512),
+        temperature=hf_config.get("temperature", 0.7)
     )
 
     # Wickle den LLM in ein Chat-Modell ein

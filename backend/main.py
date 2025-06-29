@@ -6,7 +6,10 @@ import uvicorn
 import uuid
 from typing import List, Dict, Any, Union
 
-from backend.graph import anamnesis_graph
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from graph import anamnesis_graph, load_config
 from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
 from langchain_core.runnables import RunnableConfig
 
@@ -37,6 +40,15 @@ def _serialize_messages(messages: List[BaseMessage]) -> List[Dict[str, Any]]:
         {"role": msg.type, "content": msg.content}
         for msg in messages
     ]
+
+def _determine_bot_state(messages: List[BaseMessage]) -> str:
+    """Bestimmt den Bot-Status basierend auf dem Gesprächsstand."""
+    if messages and len(messages) > 0:
+        last_message = messages[-1]
+        # Wenn die letzte Nachricht vom Bot kommt, warten wir auf eine Benutzerantwort
+        return "EXPECTING_USER_ANSWER" if isinstance(last_message, AIMessage) else "PROCESSING"
+    else:
+        return "INIT"
 
 def get_session(request: Request) -> Dict[str, Any]:
     session_id = request.cookies.get("session_id")
@@ -79,9 +91,15 @@ async def start_session(request: Request):
         )
         session["messages"] = graph_response["messages"]
 
+    # Lade Konfiguration, um den Modellnamen zu erhalten
+    config_data = load_config()
+    model_name = config_data.get("model_name", "N/A")
+
     response_data = {
         "chat_messages": _serialize_messages(session.get('messages', [])),
         "debug_mode": session.get('debug_mode_enabled', False),
+        "model_name": model_name,
+        "bot_state": _determine_bot_state(session.get('messages', []))
     }
     response = JSONResponse(content=response_data)
     save_session(session, response)
@@ -122,6 +140,7 @@ async def chat(request: Request):
 
     response_data = {
         "chat_messages": _serialize_messages(session.get('messages', [])),
+        "bot_state": _determine_bot_state(session.get('messages', []))
     }
     response = JSONResponse(content=response_data)
     save_session(session, response)
@@ -152,6 +171,7 @@ async def restart_session(request: Request):
     response_data = {
         "chat_messages": _serialize_messages(new_session.get('messages', [])),
         "debug_mode": new_session.get('debug_mode_enabled', False),
+        "bot_state": _determine_bot_state(new_session.get('messages', []))
     }
     response = JSONResponse(content=response_data)
     save_session(new_session, response)
@@ -166,7 +186,8 @@ async def toggle_debug(request: Request):
     session['debug_mode_enabled'] = not session.get('debug_mode_enabled', False)
     
     response_data = {
-        "debug_mode": session.get('debug_mode_enabled')
+        "debug_mode": session.get('debug_mode_enabled'),
+        "bot_state": _determine_bot_state(session.get('messages', []))
     }
     response = JSONResponse(content=response_data)
     save_session(session, response)
@@ -188,7 +209,8 @@ async def debug_continue(request: Request):
 
     response_data = {
         "chat_messages": _serialize_messages(session.get('messages', [])),
-        "debug_mode": session.get('debug_mode_enabled')
+        "debug_mode": session.get('debug_mode_enabled'),
+        "bot_state": _determine_bot_state(session.get('messages', []))
     }
     response = JSONResponse(content=response_data)
     save_session(session, response)
