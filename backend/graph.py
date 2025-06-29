@@ -68,11 +68,14 @@ def create_anamnesis_graph():
     # Lade den System-Prompt aus der Datei
     system_prompt = load_prompt("system_prompt.txt")
 
-    # Definiere eine Prompt-Vorlage für die Generierung der Frage
+    # Das Prompt-Template erwartet jetzt den gesamten Nachrichtenverlauf
+    # und eine zusätzliche `user_input` Variable, die hier leer bleibt,
+    # da die neuen Nachrichten im `messages` Array enthalten sind.
     prompt = ChatPromptTemplate.from_messages(
         [
             ("system", system_prompt),
-            ("human", "{user_input}"),
+            # Variable, die den bisherigen Chatverlauf aufnimmt
+            ("placeholder", "{messages}"),
         ]
     )
 
@@ -83,8 +86,9 @@ def create_anamnesis_graph():
         """
         Generiert die nächste Anamnesefrage basierend auf dem aktuellen Gesprächszustand.
         """
-        last_message = state["messages"][-1].content
-        response = chain.invoke({"user_input": last_message})
+        # Übergib den gesamten Nachrichtenverlauf an die Kette
+        response = chain.invoke({"messages": state["messages"]})
+        # Füge nur die neue Antwort zum Zustand hinzu
         return {"messages": [response]}
 
     # Definiere den Workflow

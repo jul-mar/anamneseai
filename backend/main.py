@@ -125,13 +125,13 @@ async def chat(request: Request):
     # Konfiguration für den Graphen-Lauf
     config: RunnableConfig = {"configurable": {"thread_id": session_id}}
 
-    # Add user message to chat history
+    # Füge die neue Benutzernachricht zum Verlauf in der Session hinzu
     session["messages"].append(HumanMessage(content=user_message_content))
     
     # Lege fest, ob der Graph pausieren soll
     interrupt_before = "*" if session.get('debug_mode_enabled', False) else None
     
-    # Let the graph handle the turn
+    # Führe den Graphen aus. Der Graph erhält den gesamten Verlauf.
     graph_response = anamnesis_graph.invoke(
         {"messages": session["messages"]},
         config=config,
