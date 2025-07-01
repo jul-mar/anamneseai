@@ -80,19 +80,16 @@ async def start_session(request: Request):
     # Configuration for the graph execution
     config: RunnableConfig = {"configurable": {"thread_id": session_id}}
 
-    # If the session is new (no messages), start the graph
+    # If the session is new (no messages), start with welcome message and first question
     if not session["messages"]:
-        initial_message = HumanMessage(content="Begin the medical history.")
+        # Add the welcome message first (same as old version)
+        from langchain_core.messages import AIMessage
+        welcome_message = AIMessage(content="Welcome to QuestionnAIre. I'm here to ask a few questions about your health before your appointment. Let's start.")
         
-        # Determine whether the graph should pause
-        interrupt_before = "*" if session.get('debug_mode_enabled', False) else None
-
-        graph_response = anamnesis_graph.invoke(
-            {"messages": [initial_message]}, 
-            config=config,
-            interrupt_before=interrupt_before
-        )
-        session["messages"] = graph_response["messages"]
+        # Add the specific first question
+        first_question = AIMessage(content="What is reason for your consultation? Fever or Cough?")
+        
+        session["messages"] = [welcome_message, first_question]
 
     # Load configuration to get the model name
     config_data = load_config()
@@ -164,12 +161,14 @@ async def restart_session(request: Request):
     session_id = new_session["session_id"]
     config: RunnableConfig = {"configurable": {"thread_id": session_id}}
     
-    initial_message = HumanMessage(content="Begin the medical history.")
-    graph_response = anamnesis_graph.invoke(
-        {"messages": [initial_message]},
-        config=config
-    )
-    new_session["messages"] = graph_response["messages"]
+    # Add the welcome message first (same as old version)
+    from langchain_core.messages import AIMessage
+    welcome_message = AIMessage(content="Welcome to QuestionnAIre. I'm here to ask a few questions about your health before your appointment. Let's start.")
+    
+    # Add the specific first question
+    first_question = AIMessage(content="What is reason for your consultation? Fever or Cough?")
+    
+    new_session["messages"] = [welcome_message, first_question]
 
     response_data = {
         "chat_messages": _serialize_messages(new_session.get('messages', [])),

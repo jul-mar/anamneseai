@@ -1,6 +1,10 @@
 {
-  "provider": "huggingface",
-  "model_name": "meta-llama/Llama-3.1-8B-Instruct",
+  "provider": "openai",
+  "model_name": "gpt-4o-mini",
+  "openai": {
+    "max_tokens": 1000,
+    "temperature": 0.7
+  },
   "huggingface": {
     "api_url": "https://api-inference.huggingface.co/models/",
     "max_tokens": 1000,

@@ -6,6 +6,7 @@ import operator
 from langchain_core.messages import AnyMessage, HumanMessage
 from dotenv import load_dotenv
 from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint
+from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
@@ -44,26 +45,44 @@ def create_anamnesis_graph():
     Returns:
         A compiled LangGraph application.
     """
-    hf_token = os.environ.get("HF_TOKEN")
-    if not hf_token:
-        raise ValueError("HF_TOKEN not found in environment variables.")
-
     # Load the configuration
     config = load_config()
+    provider = config.get("provider", "huggingface")
     model_name = config.get("model_name", "meta-llama/Llama-3.1-8B-Instruct")
-    hf_config = config.get("huggingface", {})
     
-    # Create the endpoint first
-    llm = HuggingFaceEndpoint(  # type: ignore[arg-type]
-        repo_id=model_name,
-        huggingfacehub_api_token=hf_token,
-        task="text-generation",
-        max_new_tokens=hf_config.get("max_tokens", 512),
-        temperature=hf_config.get("temperature", 0.7)
-    )
+    # Initialize the model based on the provider
+    if provider == "openai":
+        openai_api_key = os.environ.get("OPENAI_API_KEY")
+        if not openai_api_key:
+            raise ValueError("OPENAI_API_KEY not found in environment variables.")
+        
+        openai_config = config.get("openai", {})
+        model = ChatOpenAI(
+            model=model_name,
+            api_key=openai_api_key,
+            temperature=openai_config.get("temperature", 0.7),
+            max_tokens=openai_config.get("max_tokens", 1000)
+        )
+    elif provider == "huggingface":
+        hf_token = os.environ.get("HF_TOKEN")
+        if not hf_token:
+            raise ValueError("HF_TOKEN not found in environment variables.")
+        
+        hf_config = config.get("huggingface", {})
+        
+        # Create the endpoint first
+        llm = HuggingFaceEndpoint(  # type: ignore[arg-type]
+            repo_id=model_name,
+            huggingfacehub_api_token=hf_token,
+            task="text-generation",
+            max_new_tokens=hf_config.get("max_tokens", 512),
+            temperature=hf_config.get("temperature", 0.7)
+        )
 
-    # Wrap the LLM in a chat model
-    model = ChatHuggingFace(llm=llm)
+        # Wrap the LLM in a chat model
+        model = ChatHuggingFace(llm=llm)
+    else:
+        raise ValueError(f"Unsupported provider: {provider}. Supported providers are: openai, huggingface")
 
     # Load the system prompt from the file
     system_prompt = load_prompt("system_prompt.txt")
