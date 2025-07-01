@@ -11,7 +11,7 @@ from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 
 def load_prompt(file_name: str) -> str:
-    """Lädt einen Prompt aus dem prompts-Verzeichnis."""
+    """Loads a prompt from the prompts directory."""
     prompt_path = os.path.join(os.path.dirname(__file__), 'prompts', file_name)
     with open(prompt_path, 'r') as f:
         return f.read().strip()
@@ -20,18 +20,18 @@ load_dotenv()
 
 class GraphState(TypedDict):
     """
-    Stellt den Zustand unseres Graphen dar.
+    Represents the state of our graph.
 
-    Attribute:
-        messages: Die Liste der ausgetauschten Nachrichten.
+    Attributes:
+        messages: The list of exchanged messages.
     """
     messages: Annotated[list[AnyMessage], operator.add]
 
 def load_config():
-    """Lädt die Konfiguration aus der config.json-Datei."""
+    """Loads the configuration from the config.json file."""
     config_path = os.path.join(os.path.dirname(__file__), '..', 'config.json')
     if not os.path.exists(config_path):
-        # Fallback auf backend/config.json wenn die obige Konstruktion fehlschlägt
+        # Fallback to backend/config.json if the above construction fails
         config_path = os.path.join(os.path.dirname(__file__), 'config.json')
 
     with open(config_path, 'r') as f:
@@ -39,21 +39,21 @@ def load_config():
 
 def create_anamnesis_graph():
     """
-    Erstellt und kompiliert den LangGraph-Graphen für die Anamnese.
+    Creates and compiles the LangGraph graph for the medical history.
 
     Returns:
-        Eine kompilierte LangGraph-Anwendung.
+        A compiled LangGraph application.
     """
     hf_token = os.environ.get("HF_TOKEN")
     if not hf_token:
         raise ValueError("HF_TOKEN not found in environment variables.")
 
-    # Lade die Konfiguration
+    # Load the configuration
     config = load_config()
     model_name = config.get("model_name", "meta-llama/Llama-3.1-8B-Instruct")
     hf_config = config.get("huggingface", {})
     
-    # Erstelle zuerst den Endpoint
+    # Create the endpoint first
     llm = HuggingFaceEndpoint(  # type: ignore[arg-type]
         repo_id=model_name,
         huggingfacehub_api_token=hf_token,
@@ -62,44 +62,44 @@ def create_anamnesis_graph():
         temperature=hf_config.get("temperature", 0.7)
     )
 
-    # Wickle den LLM in ein Chat-Modell ein
+    # Wrap the LLM in a chat model
     model = ChatHuggingFace(llm=llm)
 
-    # Lade den System-Prompt aus der Datei
+    # Load the system prompt from the file
     system_prompt = load_prompt("system_prompt.txt")
 
-    # Das Prompt-Template erwartet jetzt den gesamten Nachrichtenverlauf
-    # und eine zusätzliche `user_input` Variable, die hier leer bleibt,
-    # da die neuen Nachrichten im `messages` Array enthalten sind.
+    # The prompt template now expects the entire message history
+    # and an additional `user_input` variable, which remains empty here,
+    # since the new messages are contained in the `messages` array.
     prompt = ChatPromptTemplate.from_messages(
         [
             ("system", system_prompt),
-            # Variable, die den bisherigen Chatverlauf aufnimmt
+            # Variable that captures the previous chat history
             ("placeholder", "{messages}"),
         ]
     )
 
-    # Kette aus Prompt und Modell
+    # Chain of prompt and model
     chain = prompt | model
 
     def generate_question_node(state: GraphState):
         """
-        Generiert die nächste Anamnesefrage basierend auf dem aktuellen Gesprächszustand.
+        Generates the next medical history question based on the current conversation state.
         """
-        # Übergib den gesamten Nachrichtenverlauf an die Kette
+        # Pass the entire message history to the chain
         response = chain.invoke({"messages": state["messages"]})
-        # Füge nur die neue Antwort zum Zustand hinzu
+        # Add only the new response to the state
         return {"messages": [response]}
 
-    # Definiere den Workflow
+    # Define the workflow
     workflow = StateGraph(GraphState)
     workflow.add_node("generate_question", generate_question_node)
     workflow.set_entry_point("generate_question")
     workflow.add_edge("generate_question", END)
 
-    # Kompiliere den Graphen mit einem Checkpointer und gib ihn zurück
+    # Compile the graph with a checkpointer and return it
     checkpointer = MemorySaver()
     return workflow.compile(checkpointer=checkpointer)
 
-# Erstelle eine globale Instanz des Graphen für die Anwendung
+# Create a global instance of the graph for the application
 anamnesis_graph = create_anamnesis_graph() 

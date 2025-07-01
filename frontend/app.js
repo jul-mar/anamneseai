@@ -19,7 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
         botState: 'INIT',
         debugMode: false,
         isLoading: false,
-        modelName: 'lädt...'
+        modelName: 'loading...'
     };
 
     /**
@@ -129,7 +129,7 @@ document.addEventListener('DOMContentLoaded', () => {
         debugToggle.checked = state.debugMode;
 
         // Display the model name
-        modelNameContainer.textContent = `Modell: ${state.modelName}`;
+        modelNameContainer.textContent = `Model: ${state.modelName}`;
 
         // --- Form & Button State Control ---
         const isWaitingForUser = state.botState === 'EXPECTING_USER_ANSWER';
@@ -141,11 +141,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (formDisabled) {
             messageInput.classList.remove('bg-gray-100');
             messageInput.classList.add('bg-gray-200', 'opacity-70');
-            messageInput.placeholder = 'Bitte warten...';
+            messageInput.placeholder = 'Please wait...';
         } else {
             messageInput.classList.remove('bg-gray-200', 'opacity-70');
             messageInput.classList.add('bg-gray-100');
-            messageInput.placeholder = 'Ihre Antwort...';
+            messageInput.placeholder = 'Your answer...';
             messageInput.focus();
         }
 
@@ -157,7 +157,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const continueButton = document.createElement('button');
             continueButton.id = 'continue-button';
             continueButton.className = 'btn btn-sm btn-accent';
-            continueButton.textContent = `Nächster Schritt (Status: ${state.botState})`;
+            continueButton.textContent = `Next Step (Status: ${state.botState})`;
             continueButton.onclick = async () => {
                 if (state.isLoading) return;
                 const response = await api.continueDebugStep();
@@ -169,11 +169,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- Loading Indicators Control ---
         if (state.isLoading) {
             sendButton.classList.add('loading');
-            statusIndicator.textContent = 'lädt...';
+            statusIndicator.textContent = 'loading...';
             statusIndicator.className = 'ml-2 font-mono badge badge-outline badge-info';
         } else {
             sendButton.classList.remove('loading');
-            statusIndicator.textContent = 'bereit';
+            statusIndicator.textContent = 'ready';
             statusIndicator.className = 'ml-2 font-mono badge badge-outline badge-success';
         }
     }
@@ -187,13 +187,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const errorMsg = {
             id: `err-${Date.now()}`,
             role: 'error',
-            content: `Ein Fehler ist aufgetreten:\n${errorMessage}`
+            content: `An error occurred:\n${errorMessage}`
         };
         state.messages.push(errorMsg);
         render(); // Re-render to show the error message
 
         // Also update status indicator immediately for clarity
-        statusIndicator.textContent = 'Fehler';
+        statusIndicator.textContent = 'Error';
         statusIndicator.className = 'ml-2 font-mono badge badge-outline badge-error';
     }
 

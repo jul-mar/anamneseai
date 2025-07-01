@@ -3,6 +3,7 @@ sputum?
 shortness of breath?
 
 
+
             {
                 "id": "cough_present",
                 "text": "To start, are you currently experiencing any coughing?",

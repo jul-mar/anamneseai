@@ -40,15 +40,15 @@ def _serialize_messages(messages: List[BaseMessage]) -> List[Dict[str, Any]]:
     for msg in messages:
         role = msg.type
         if role == 'human':
-            role = 'user'  # Konvertiere 'human' zu 'user' für das Frontend
+            role = 'user'  # Convert 'human' to 'user' for the frontend
         serialized.append({"role": role, "content": msg.content})
     return serialized
 
 def _determine_bot_state(messages: List[BaseMessage]) -> str:
-    """Bestimmt den Bot-Status basierend auf dem Gesprächsstand."""
+    """Determines the bot status based on the conversation state."""
     if messages and len(messages) > 0:
         last_message = messages[-1]
-        # Wenn die letzte Nachricht vom Bot kommt, warten wir auf eine Benutzerantwort
+        # If the last message comes from the bot, we wait for a user response
         return "EXPECTING_USER_ANSWER" if isinstance(last_message, AIMessage) else "PROCESSING"
     else:
         return "INIT"
@@ -62,7 +62,7 @@ def get_session(request: Request) -> Dict[str, Any]:
     sessions[new_session_id] = {
         "session_id": new_session_id,
         "messages": [],
-        "debug_mode_enabled": False, # Standardmäßig deaktiviert
+        "debug_mode_enabled": False, # Disabled by default
     }
     return sessions[new_session_id]
 
@@ -77,14 +77,14 @@ async def start_session(request: Request):
     session = get_session(request)
     session_id = session["session_id"]
     
-    # Konfiguration für den Graphen-Lauf
+    # Configuration for the graph execution
     config: RunnableConfig = {"configurable": {"thread_id": session_id}}
 
-    # Wenn die Session neu ist (keine Nachrichten), starte den Graphen
+    # If the session is new (no messages), start the graph
     if not session["messages"]:
-        initial_message = HumanMessage(content="Beginne die Anamnese.")
+        initial_message = HumanMessage(content="Begin the medical history.")
         
-        # Lege fest, ob der Graph pausieren soll
+        # Determine whether the graph should pause
         interrupt_before = "*" if session.get('debug_mode_enabled', False) else None
 
         graph_response = anamnesis_graph.invoke(
@@ -94,7 +94,7 @@ async def start_session(request: Request):
         )
         session["messages"] = graph_response["messages"]
 
-    # Lade Konfiguration, um den Modellnamen zu erhalten
+    # Load configuration to get the model name
     config_data = load_config()
     model_name = config_data.get("model_name", "N/A")
 
@@ -122,16 +122,16 @@ async def chat(request: Request):
     if not user_message_content:
         raise HTTPException(status_code=422, detail="Message cannot be empty.")
 
-    # Konfiguration für den Graphen-Lauf
+    # Configuration for the graph execution
     config: RunnableConfig = {"configurable": {"thread_id": session_id}}
 
-    # Füge die neue Benutzernachricht zum Verlauf in der Session hinzu
+    # Add the new user message to the session history
     session["messages"].append(HumanMessage(content=user_message_content))
     
-    # Lege fest, ob der Graph pausieren soll
+    # Determine whether the graph should pause
     interrupt_before = "*" if session.get('debug_mode_enabled', False) else None
     
-    # Führe den Graphen aus. Der Graph erhält den gesamten Verlauf.
+    # Execute the graph. The graph receives the entire history.
     graph_response = anamnesis_graph.invoke(
         {"messages": session["messages"]},
         config=config,
@@ -164,7 +164,7 @@ async def restart_session(request: Request):
     session_id = new_session["session_id"]
     config: RunnableConfig = {"configurable": {"thread_id": session_id}}
     
-    initial_message = HumanMessage(content="Beginne die Anamnese.")
+    initial_message = HumanMessage(content="Begin the medical history.")
     graph_response = anamnesis_graph.invoke(
         {"messages": [initial_message]},
         config=config
@@ -203,7 +203,7 @@ async def debug_continue(request: Request):
     if not session:
         raise HTTPException(status_code=400, detail="Session not started.")
     
-    # Konfiguration, um den Graphen fortzusetzen
+    # Configuration to continue the graph
     config: RunnableConfig = {"configurable": {"thread_id": session_id}}
 
     # Trigger the next graph turn by invoking with no new messages
