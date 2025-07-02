@@ -2,9 +2,11 @@
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 import uvicorn
 import uuid
-from typing import List, Dict, Any, Union
+from typing import List, Dict, Any, Union, Optional
+import logging
 
 import sys
 import os
@@ -12,8 +14,42 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from graph import anamnesis_graph, load_config
 from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
 from langchain_core.runnables import RunnableConfig
+from database import MedicalHistoryDatabase
+from models import MedicalChatbotConfig
 
-app = FastAPI()
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Global database instance
+db: Optional[MedicalHistoryDatabase] = None
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initialize database on startup and cleanup on shutdown"""
+    global db
+    try:
+        # Initialize database on startup
+        logger.info("Initializing medical history database...")
+        config = MedicalChatbotConfig()
+        db = MedicalHistoryDatabase(config.database_file)
+        logger.info(f"Database initialized successfully at {config.database_file}")
+        
+        # Test database connection
+        test_session_id = db.create_session("startup_test")
+        logger.info(f"Database connection test successful - created session {test_session_id}")
+        
+        yield
+        
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}")
+        # Continue without database for fallback compatibility
+        yield
+    finally:
+        # Cleanup on shutdown
+        logger.info("Application shutting down...")
+
+app = FastAPI(lifespan=lifespan)
 
 # Global dictionary to store session data in memory
 # Key: session_id (str), Value: session_data (dict)
