@@ -7,6 +7,7 @@ import uvicorn
 import uuid
 from typing import List, Dict, Any, Union, Optional
 import logging
+from dotenv import load_dotenv
 
 import sys
 import os
@@ -16,6 +17,9 @@ from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
 from langchain_core.runnables import RunnableConfig
 from database import MedicalHistoryDatabase
 from models import MedicalChatbotConfig
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

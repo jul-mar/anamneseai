@@ -1,74 +1,134 @@
 [
   {
-    "id": "cough_onset",
-    "text": "When did the cough start?",
+    "id": "chief_complaint",
+    "question": "What is the main reason for your visit today? Please describe your primary concern or symptom.",
     "criteria": [
-      "Example: About 3 days ago",
-      "Example: Last Monday",
-      "Example: For roughly 2 weeks",
-      "A specific date or duration is helpful."
-    ]
+      "Must describe a specific symptom or health concern",
+      "Must be health-related (not administrative)",
+      "Should include the main complaint or reason for seeking care"
+    ],
+    "category": "primary",
+    "required": true
   },
   {
-    "id": "cough_frequency",
-    "text": "How often do you find yourself coughing?",
+    "id": "symptom_onset",
+    "question": "When did your symptoms first start?",
     "criteria": [
-      "Constantly",
-      "Frequently throughout the day (e.g., several times an hour)",
-      "Occasionally (e.g., a few times a day)",
-      "Rarely (e.g., only once or twice a day)",
-      "Mostly in the mornings",
-      "It's an all day long thing"
-    ]
+      "Must include a time period (days, weeks, months, years)",
+      "Must be specific (not vague terms like 'recently' or 'a while ago')",
+      "Should provide context for timing (e.g., 'about 3 days ago', 'last Monday')"
+    ],
+    "category": "history",
+    "required": true
   },
   {
-    "id": "cough_character",
-    "text": "How would you describe the cough? For example, is it dry, or are you coughing anything up? Is it a tickling cough, or more of a deep cough?",
+    "id": "symptom_duration",
+    "question": "How long have you been experiencing this symptom?",
     "criteria": [
-      "Dry (no phlegm)",
-      "Chesty (with phlegm)",
-      "Hacking cough",
-      "Barking sound",
-      "Tickling in the throat",
-      "Deep from the chest",
-      "Example: It's a dry, irritating cough.",
-      "Example: I cough up some phlegm sometimes."
-    ]
+      "Must include a time period (hours, days, weeks, months)",
+      "Must be specific (not vague terms like 'recently')",
+      "Should indicate if symptoms are constant or intermittent"
+    ],
+    "category": "history",
+    "required": true
   },
   {
-    "id": "cough_triggers",
-    "text": "Is there anything specific that seems to trigger your cough or make it worse?",
+    "id": "symptom_character",
+    "question": "How would you describe your symptoms? Please be as specific as possible about what you're experiencing.",
     "criteria": [
-      "Lying down",
-      "Exercise or physical activity",
-      "Cold air",
-      "After eating certain foods",
-      "Dust or other irritants",
-      "Specific times of day (e.g., mornings, nights)",
-      "Example: It gets worse when I lie down at night."
-    ]
+      "Must provide descriptive details about the symptom",
+      "Should include quality, intensity, or characteristics",
+      "Must be more than just repeating the symptom name"
+    ],
+    "category": "description",
+    "required": true
   },
   {
-    "id": "cough_relievers",
-    "text": "Does anything make your cough better or provide some relief?",
+    "id": "symptom_severity",
+    "question": "On a scale of 1-10, how severe are your symptoms? How are they affecting your daily activities?",
     "criteria": [
-      "Drinking water or warm fluids",
-      "Specific medication or lozenges",
-      "Sitting upright",
-      "Avoiding known triggers",
-      "Example: Warm tea seems to help a bit."
-    ]
+      "Must include a numeric rating or clear severity description",
+      "Should describe impact on daily activities",
+      "Must provide context for severity level"
+    ],
+    "category": "assessment",
+    "required": true
   },
   {
-    "id": "cough_severity_impact",
-    "text": "How much would you say the cough is affecting your daily life or your sleep?",
+    "id": "aggravating_factors",
+    "question": "Is there anything that makes your symptoms worse?",
     "criteria": [
-      "Not at all, it's just minor",
-      "Mildly, a bit annoying but manageable",
-      "Moderately, it interferes with some activities or sleep",
-      "Severely, it significantly disrupts my activities and/or sleep",
-      "Example: It keeps me up at night.",
-      "Example: It's mostly just a nuisance during the day."
-    ]
+      "Must identify specific triggers or worsening factors",
+      "Should include activities, positions, times, or circumstances",
+      "Can include 'nothing' if no aggravating factors are known"
+    ],
+    "category": "modifying_factors",
+    "required": true
+  },
+  {
+    "id": "relieving_factors",
+    "question": "Is there anything that makes your symptoms better or provides relief?",
+    "criteria": [
+      "Must identify specific relief measures",
+      "Should include medications, positions, activities, or treatments tried",
+      "Can include 'nothing' if no relief has been found"
+    ],
+    "category": "modifying_factors",
+    "required": true
+  },
+  {
+    "id": "associated_symptoms",
+    "question": "Are you experiencing any other symptoms along with your main concern?",
+    "criteria": [
+      "Must list any additional symptoms clearly",
+      "Should be specific about each additional symptom",
+      "Can state 'no other symptoms' if none are present"
+    ],
+    "category": "review_of_systems",
+    "required": true
+  },
+  {
+    "id": "previous_episodes",
+    "question": "Have you experienced similar symptoms before? If so, when and what was done about it?",
+    "criteria": [
+      "Must clearly state if symptoms have occurred before",
+      "Should include timing of previous episodes if applicable",
+      "Should mention any previous treatments or diagnoses"
+    ],
+    "category": "history",
+    "required": true
+  },
+  {
+    "id": "current_medications",
+    "question": "What medications are you currently taking, including over-the-counter medications and supplements?",
+    "criteria": [
+      "Must list specific medication names or state 'none'",
+      "Should include dosages if known",
+      "Should include over-the-counter medications and supplements"
+    ],
+    "category": "medications",
+    "required": true
+  },
+  {
+    "id": "allergies",
+    "question": "Do you have any known allergies to medications, foods, or other substances?",
+    "criteria": [
+      "Must clearly state if allergies exist or not",
+      "Should specify the allergen if allergies are present",
+      "Should describe the type of reaction if applicable"
+    ],
+    "category": "allergies",
+    "required": true
+  },
+  {
+    "id": "medical_history",
+    "question": "Do you have any significant medical conditions or chronic illnesses?",
+    "criteria": [
+      "Must state if medical conditions exist or not",
+      "Should list specific conditions if present",
+      "Should include chronic illnesses and major past medical events"
+    ],
+    "category": "past_medical_history",
+    "required": true
   }
 ]
