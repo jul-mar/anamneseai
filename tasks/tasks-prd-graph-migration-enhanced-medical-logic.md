@@ -3,8 +3,10 @@
 - `backend/graph.py` - Main graph implementation file to be completely replaced with enhanced logic
 - `backend/database.py` - New database layer for SQLite operations and schema management (CREATED)
 - `backend/medical_history.db` - SQLite database file for persistent storage (CREATED)
-- `backend/questions.json` - Enhanced question configuration with evaluation criteria
+- `backend/questions.json` - Enhanced question configuration with evaluation criteria (UPDATED)
 - `backend/models.py` - Data models and dataclasses for medical chat state and configuration (CREATED)
+- `backend/question_manager.py` - Question management system with JSON parsing and validation (CREATED)
+- `backend/answer_evaluator.py` - LLM-based answer evaluation system (CREATED)
 - `backend/main.py` - FastAPI endpoints that need integration with new graph system
 - `backend/config.json` - Configuration file that may need database settings
 - `backend/medical_history.db` - SQLite database file for persistent storage
@@ -19,7 +21,7 @@
 
 ## Tasks
 
-- [ ] 1.0 Setup Database Infrastructure and Models
+- [x] 1.0 Setup Database Infrastructure and Models
   - [x] 1.1 Create SQLite database schema with medical_sessions, answered_questions, and conversation_history tables
   - [x] 1.2 Implement database.py module with connection management and CRUD operations
   - [x] 1.3 Create models.py with MedicalChatState dataclass and MedicalChatbotConfig
@@ -28,9 +30,9 @@
   - [x] 1.6 Add error handling for database connection failures with fallback mechanisms
 
 - [ ] 2.0 Implement Enhanced Question Management System
-  - [ ] 2.1 Update questions.json with criteria fields for each question
-  - [ ] 2.2 Create question loader function to parse JSON with validation criteria
-  - [ ] 2.3 Implement LLM-based answer evaluation function against predefined criteria
+  - [x] 2.1 Update questions.json with criteria fields for each question
+  - [x] 2.2 Create question loader function to parse JSON with validation criteria
+  - [x] 2.3 Implement LLM-based answer evaluation function against predefined criteria
   - [ ] 2.4 Build retry logic system with maximum 3 attempts per question
   - [ ] 2.5 Create helpful guidance generation for insufficient answers
   - [ ] 2.6 Add question progression tracking and completion detection
