@@ -13,14 +13,46 @@ The core of the backend is the `anamnesis_graph` defined in `backend/graph.py`. 
 ## Getting Started
 
 ### Prerequisites
-- Python 3.8+
-- A Hugging Face account and an API Token.
+- Python 3.9+
+- An OpenAI API key (for GPT-4o-mini)
+- [UV](https://docs.astral.sh/uv/) package manager (recommended) or pip
+
+### Quick Setup with UV (Recommended)
+
+**1. Install UV:**
+```bash
+# Install UV (if not already installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+# or with pip
+pip install uv
+```
+
+**2. Run the setup script:**
+```bash
+# Run the automated setup script
+./setup-uv.sh
+```
+
+This will automatically:
+- Initialize the UV project
+- Create a virtual environment
+- Install all dependencies
+- Set up the project structure
+
+### Manual Setup
 
 ### 1. Backend Setup
 First, set up and run the backend server.
 
 **a. Install dependencies:**
-Navigate to the project root and install the required Python packages from the `backend/requirements.txt` file. It's recommended to use a virtual environment.
+
+**With UV (recommended):**
+```bash
+# Initialize and sync dependencies
+uv sync
+```
+
+**With pip (traditional):**
 ```bash
 # Create and activate a virtual environment (optional but recommended)
 python -m venv .venv
@@ -31,22 +63,34 @@ pip install -r backend/requirements.txt
 ```
 
 **b. Configure Environment Variables:**
-The backend requires a Hugging Face API token to access the LLM. Create a `.env` file in the project root directory and add your token:
+The backend requires an OpenAI API key to access GPT-4o-mini. Create a `.env` file in the project root directory and add your token:
 ```bash
 # In your project root, create a .env file
 touch .env
 ```
 Add the following line to the `.env` file:
 ```
-HF_TOKEN="your_hugging_face_api_token_here"
+OPENAI_API_KEY="your_openai_api_key_here"
 ```
-The application uses the `mistralai/Mistral-7B-Instruct-v0.3` model by default. You can change this directly in `backend/graph.py` if needed.
+The application uses `gpt-4o-mini` by default. You can change this in `backend/config.json` if needed.
 
 **c. Run the backend server:**
-From the project root directory, run the `main.py` script using `uvicorn`.
+
+**With UV:**
+```bash
+uv run uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+**With pip/traditional setup:**
 ```bash
 uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
 ```
+
+**Or use the convenient start script:**
+```bash
+./start.sh
+```
+
 The `--reload` flag is optional but helpful for development. The backend API is now running and accessible at `http://localhost:8000`.
 
 ### 2. Frontend Setup
@@ -63,6 +107,33 @@ Open your web browser and navigate to:
 **[http://localhost:8080](http://localhost:8080)**
 
 You can now interact with the QuestionnAIre chatbot.
+
+## UV Commands Reference
+
+If you're using UV for package management, here are some useful commands:
+
+```bash
+# Add a new dependency
+uv add <package-name>
+
+# Add a development dependency
+uv add --dev <package-name>
+
+# Remove a dependency
+uv remove <package-name>
+
+# Update dependencies
+uv sync
+
+# Run a command in the virtual environment
+uv run <command>
+
+# Activate the virtual environment
+uv shell
+
+# Show project information
+uv tree
+```
 
 ## Debug Mode
 The application includes a debug mode that allows you to step through the conversation graph.

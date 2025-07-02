@@ -27,9 +27,9 @@ cleanup() {
 # This catches script termination from Ctrl+C (SIGINT) or other signals.
 trap cleanup EXIT
 
-# 1. Start the backend server
+# 1. Start the backend server using uv
 echo "Starting backend server on http://localhost:8000..."
-uvicorn backend.main:app --host 0.0.0.0 --port 8000 &
+uv run uvicorn backend.main:app --host 0.0.0.0 --port 8000 &
 backend_pid=$! # Store the PID of the backend process
 
 # 2. Start the frontend server
