@@ -1,124 +1,168 @@
-import os
-import json
-from typing import TypedDict, Annotated
-import operator
-
-from langchain_core.messages import AnyMessage, HumanMessage
-from dotenv import load_dotenv
-from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint
-from langchain_openai import ChatOpenAI
-from langchain_core.prompts import ChatPromptTemplate
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
+from backend.models import MedicalChatState, MedicalChatbotConfig, MedicalQuestion
+from backend.question_manager import QuestionManager
+from backend.answer_evaluator import AnswerEvaluator
 
-def load_prompt(file_name: str) -> str:
-    """Loads a prompt from the prompts directory."""
-    prompt_path = os.path.join(os.path.dirname(__file__), 'prompts', file_name)
-    with open(prompt_path, 'r') as f:
-        return f.read().strip()
+# This implementation will be progressively refined.
+# Full functionality requires all sub-tasks for Parent Task 3.0 to be complete.
 
-load_dotenv()
-
-class GraphState(TypedDict):
+def build_medical_graph():
     """
-    Represents the state of our graph.
-
-    Attributes:
-        messages: The list of exchanged messages.
+    Builds and compiles the LangGraph for the medical history conversation.
     """
-    messages: Annotated[list[AnyMessage], operator.add]
-
-def load_config():
-    """Loads the configuration from the config.json file."""
-    config_path = os.path.join(os.path.dirname(__file__), '..', 'config.json')
-    if not os.path.exists(config_path):
-        # Fallback to backend/config.json if the above construction fails
-        config_path = os.path.join(os.path.dirname(__file__), 'config.json')
-
-    with open(config_path, 'r') as f:
-        return json.load(f)
-
-def create_anamnesis_graph():
-    """
-    Creates and compiles the LangGraph graph for the medical history.
-
-    Returns:
-        A compiled LangGraph application.
-    """
-    # Load the configuration
-    config = load_config()
-    provider = config.get("provider", "huggingface")
-    model_name = config.get("model_name", "meta-llama/Llama-3.1-8B-Instruct")
     
-    # Initialize the model based on the provider
-    if provider == "openai":
-        openai_api_key = os.environ.get("OPENAI_API_KEY")
-        if not openai_api_key:
-            raise ValueError("OPENAI_API_KEY not found in environment variables.")
-        
-        openai_config = config.get("openai", {})
-        model = ChatOpenAI(
-            model=model_name,
-            api_key=openai_api_key,
-            temperature=openai_config.get("temperature", 0.7),
-            max_tokens=openai_config.get("max_tokens", 1000)
+    # Instantiate necessary components for the graph's logic
+    config = MedicalChatbotConfig()
+    question_manager = QuestionManager(config)
+    answer_evaluator = AnswerEvaluator(config)
+
+    def ask_question(state: MedicalChatState) -> dict:
+        """
+        Asks the current question, handling the welcome message and retries.
+        """
+        current_question = question_manager.get_question_at_index(state.current_question_index)
+
+        # If no more questions are left, the check_completion node will end the graph.
+        # This is a safeguard.
+        if not current_question:
+            return {
+                "is_complete": True,
+                "last_bot_message": "Vielen Dank. Ihre medizinische Vorgeschichte wurde erfasst."
+            }
+
+        bot_message = ""
+        # Handle the very first interaction (welcome message + first question)
+        if state.is_welcome_phase:
+            welcome_message = "Willkommen bei AnamneseAI! Ich bin Ihr medizinischer Assistent. Um zu beginnen, beantworten Sie bitte die folgende Frage."
+            bot_message = f"{welcome_message}\\n\\n{current_question.question}"
+        # Handle retries for insufficient answers
+        elif state.retry_count > 0:
+            guidance = state.evaluation_result.get("guidance", "Könnten Sie bitte etwas mehr Details angeben?")
+            bot_message = f"{guidance}\\n\\nLassen Sie es uns noch einmal versuchen: {current_question.question}"
+        # Handle regular question progression
+        else:
+            bot_message = current_question.question
+            
+        return {
+            "current_question": current_question.to_dict(),
+            "last_bot_message": bot_message,
+            "is_welcome_phase": False  # Welcome phase is over after the first message is composed
+        }
+
+    def evaluate_response(state: MedicalChatState) -> dict:
+        """
+        Evaluates the user's response using the AnswerEvaluator.
+        """
+        user_answer = state.user_input
+        current_question_data = state.current_question
+
+        if not user_answer or not current_question_data:
+            return {"evaluation_result": {
+                "is_sufficient": False,
+                "score": 0.0,
+                "feedback": "Ein interner Fehler ist aufgetreten.",
+                "guidance": "Könnten Sie Ihre Antwort bitte wiederholen?",
+                "evaluation_reasoning": "Missing user_input or current_question in state."
+            }}
+
+        # Re-create the MedicalQuestion object from the dictionary in the state
+        question = MedicalQuestion.from_dict(current_question_data)
+
+        # Evaluate the answer synchronously
+        evaluation = answer_evaluator.evaluate_answer_sync(
+            question=question,
+            user_answer=user_answer
         )
-    elif provider == "huggingface":
-        hf_token = os.environ.get("HF_TOKEN")
-        if not hf_token:
-            raise ValueError("HF_TOKEN not found in environment variables.")
-        
-        hf_config = config.get("huggingface", {})
-        
-        # Create the endpoint first
-        llm = HuggingFaceEndpoint(  # type: ignore[arg-type]
-            repo_id=model_name,
-            huggingfacehub_api_token=hf_token,
-            task="text-generation",
-            max_new_tokens=hf_config.get("max_tokens", 512),
-            temperature=hf_config.get("temperature", 0.7)
-        )
 
-        # Wrap the LLM in a chat model
-        model = ChatHuggingFace(llm=llm)
-    else:
-        raise ValueError(f"Unsupported provider: {provider}. Supported providers are: openai, huggingface")
+        return {"evaluation_result": evaluation.to_dict()}
 
-    # Load the system prompt from the file
-    system_prompt = load_prompt("system_prompt.txt")
+    def handle_sufficient_response(state: MedicalChatState) -> dict:
+        """
+        Handles a sufficient response by advancing to the next question and resetting retries.
+        """
+        # The state object's method encapsulates the logic for advancing.
+        state.advance_to_next_question()
 
-    # The prompt template now expects the entire message history
-    # and an additional `user_input` variable, which remains empty here,
-    # since the new messages are contained in the `messages` array.
-    prompt = ChatPromptTemplate.from_messages(
-        [
-            ("system", system_prompt),
-            # Variable that captures the previous chat history
-            ("placeholder", "{messages}"),
-        ]
+        # Return the updated fields to be merged back into the graph's state.
+        return {
+            "current_question_index": state.current_question_index,
+            "retry_count": state.retry_count,
+            "is_complete": state.is_complete,
+            "current_question": state.current_question
+        }
+
+    def handle_insufficient_response(state: MedicalChatState) -> dict:
+        """
+        Handles an insufficient response by incrementing the retry count or advancing
+        to the next question if the maximum number of retries has been reached.
+        """
+        # Check if the user has retries left for the current question
+        if state.has_retries_left():
+            # If so, increment the retry count. The graph will loop back to ask again.
+            state.increment_retry()
+            return {"retry_count": state.retry_count}
+        else:
+            # If no retries are left, advance to the next question to avoid getting stuck.
+            state.advance_to_next_question()
+            return {
+                "current_question_index": state.current_question_index,
+                "retry_count": state.retry_count,  # Will be 0 after advancing
+                "is_complete": state.is_complete,
+                "current_question": state.current_question
+            }
+
+    def route_evaluation(state: MedicalChatState) -> str:
+        """Route based on evaluation result"""
+        evaluation_result = state.evaluation_result or {}
+        if evaluation_result.get("is_sufficient"):
+            return "sufficient"
+        return "insufficient"
+
+    def check_completion(state: MedicalChatState) -> str:
+        """Check if all questions have been answered"""
+        if state.is_complete:
+            return END
+        return "ask_question"
+    
+    # Define the workflow
+    workflow = StateGraph(MedicalChatState)
+
+    # Add nodes
+    workflow.add_node("ask_question", ask_question)
+    workflow.add_node("evaluate_response", evaluate_response)
+    workflow.add_node("handle_sufficient_response", handle_sufficient_response)
+    workflow.add_node("handle_insufficient_response", handle_insufficient_response)
+
+    # Define edges
+    workflow.set_entry_point("ask_question")
+    workflow.add_edge("ask_question", "evaluate_response")
+    
+    # Conditional routing after evaluation
+    workflow.add_conditional_edges(
+        "evaluate_response",
+        route_evaluation,
+        {
+            "sufficient": "handle_sufficient_response",
+            "insufficient": "handle_insufficient_response"
+        }
     )
 
-    # Chain of prompt and model
-    chain = prompt | model
-
-    def generate_question_node(state: GraphState):
-        """
-        Generates the next medical history question based on the current conversation state.
-        """
-        # Pass the entire message history to the chain
-        response = chain.invoke({"messages": state["messages"]})
-        # Add only the new response to the state
-        return {"messages": [response]}
-
-    # Define the workflow
-    workflow = StateGraph(GraphState)
-    workflow.add_node("generate_question", generate_question_node)
-    workflow.set_entry_point("generate_question")
-    workflow.add_edge("generate_question", END)
-
-    # Compile the graph with a checkpointer and return it
+    # Loop back or end after handling responses
+    workflow.add_conditional_edges(
+        "handle_sufficient_response",
+        check_completion,
+        {END: END, "ask_question": "ask_question"}
+    )
+    workflow.add_conditional_edges(
+        "handle_insufficient_response",
+        check_completion,
+        {END: END, "ask_question": "ask_question"}
+    )
+    
+    # Compile the graph with a memory saver to make it stateful
     checkpointer = MemorySaver()
     return workflow.compile(checkpointer=checkpointer)
 
-# Create a global instance of the graph for the application
-anamnesis_graph = create_anamnesis_graph() 
+# Create a global instance of the graph
+anamnesis_graph = build_medical_graph() 

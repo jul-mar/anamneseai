@@ -1,11 +1,11 @@
 [
   {
     "id": "chief_complaint",
-    "question": "What is the main reason for your visit today? Please describe your primary concern or symptom.",
+    "question": "Was ist der Grund für Ihre Konsultation? Fieber oder Husten?",
     "criteria": [
-      "Must describe a specific symptom or health concern",
-      "Must be health-related (not administrative)",
-      "Should include the main complaint or reason for seeking care"
+      "Muss angeben, ob das Hauptsymptom Fieber oder Husten ist",
+      "Muss sich auf eines der beiden Symptome beziehen",
+      "Sollte klar und eindeutig sein"
     ],
     "category": "primary",
     "required": true
