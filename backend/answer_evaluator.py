@@ -1,5 +1,6 @@
 import json
 import logging
+import asyncio
 from typing import Dict, List, Optional, Any
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
@@ -7,6 +8,7 @@ from langchain_core.output_parsers import JsonOutputParser
 from backend.models import MedicalQuestion, QuestionEvaluation, MedicalChatbotConfig
 
 logger = logging.getLogger(__name__)
+llm_logger = logging.getLogger("llm_interactions")
 
 class AnswerEvaluator:
     """LLM-based medical answer evaluation system"""
@@ -114,12 +116,23 @@ Please provide a short, friendly guidance message to help the user give a better
             # Create the evaluation chain
             chain = self.evaluation_prompt | self.llm | self.json_parser
             
+            # Log the prompt being sent to the LLM
+            prompt_for_log = self.evaluation_prompt.format_prompt(
+                question=question.question,
+                criteria=criteria_text,
+                answer=user_answer.strip()
+            ).to_string()
+            llm_logger.info(f"--- LLM PROMPT (Answer Evaluation) ---\n{prompt_for_log}")
+
             # Execute evaluation
             result = await chain.ainvoke({
                 "question": question.question,
                 "criteria": criteria_text,
                 "answer": user_answer.strip()
             })
+            
+            # Log the raw response from the LLM
+            llm_logger.info(f"--- LLM RESPONSE (Answer Evaluation) ---\n{json.dumps(result, indent=2)}")
             
             # Parse and validate result
             evaluation = self._parse_evaluation_result(result, question, user_answer)
@@ -256,12 +269,23 @@ Please provide a short, friendly guidance message to help the user give a better
             # Create the evaluation chain
             chain = self.evaluation_prompt | self.llm | self.json_parser
             
-            # Execute evaluation synchronously
+            # Format and log the prompt
+            prompt_for_log = self.evaluation_prompt.format_prompt(
+                question=question.question,
+                criteria=criteria_text,
+                answer=user_answer.strip()
+            ).to_string()
+            llm_logger.info(f"--- LLM PROMPT (Sync Answer Evaluation) ---\n{prompt_for_log}")
+
+            # Execute evaluation
             result = chain.invoke({
                 "question": question.question,
                 "criteria": criteria_text,
                 "answer": user_answer.strip()
             })
+
+            # Log the raw response
+            llm_logger.info(f"--- LLM RESPONSE (Sync Answer Evaluation) ---\n{json.dumps(result, indent=2)}")
             
             # Parse and validate result
             evaluation = self._parse_evaluation_result(result, question, user_answer)

@@ -5,6 +5,7 @@ from pathlib import Path
 from backend.models import MedicalQuestion, MedicalChatbotConfig
 
 logger = logging.getLogger(__name__)
+llm_logger = logging.getLogger("llm_interactions")
 
 class QuestionManager:
     """Manages medical questions with validation criteria loading and parsing"""

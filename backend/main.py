@@ -20,8 +20,21 @@ from models import MedicalChatbotConfig, MedicalChatState
 from question_manager import QuestionManager
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.WARNING)  # Set default level to WARNING to hide INFO logs
+# Create a specific logger for LLM interactions
+llm_logger = logging.getLogger("llm_interactions")
+llm_logger.setLevel(logging.INFO)
+
+# Configure a handler for the LLM logger to ensure its messages are visible
+handler = logging.StreamHandler()
+handler.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+llm_logger.addHandler(handler)
+llm_logger.propagate = False # Prevent llm_interactions from propagating to the root logger
+
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO) # Keep main app logger at INFO
 
 # Global database and component instances
 db: Optional[MedicalHistoryDatabase] = None
