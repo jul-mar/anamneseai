@@ -41,10 +41,10 @@ def build_medical_graph():
         if state.is_welcome_phase:
             welcome_message = "Willkommen bei AnamneseAI! Ich bin Ihr medizinischer Assistent. Um zu beginnen, beantworten Sie bitte die folgende Frage."
             bot_message = f"{welcome_message}\\n\\n{current_question.question}"
-        # Handle retries for insufficient answers
+        # Handle retries - this should not happen as retries are handled in handle_insufficient_response
         elif state.retry_count > 0:
-            guidance = state.evaluation_result.get("guidance", "Könnten Sie bitte etwas mehr Details angeben?")
-            bot_message = f"{guidance}\\n\\nLassen Sie es uns noch einmal versuchen: {current_question.question}"
+            # This is a fallback that should rarely be used
+            bot_message = current_question.question
         # Handle regular question progression
         else:
             bot_message = current_question.question
@@ -125,6 +125,12 @@ def build_medical_graph():
         # The state object's method encapsulates the logic for advancing.
         state.advance_to_next_question()
 
+        # Update current_question to the new question after advancing
+        if not state.is_complete:
+            current_question = question_manager.get_question_at_index(state.current_question_index)
+            if current_question:
+                state.current_question = current_question.to_dict()
+
         # Return the updated fields to be merged back into the graph's state.
         return {
             "current_question_index": state.current_question_index,
@@ -141,12 +147,39 @@ def build_medical_graph():
         """
         # Check if the user has retries left for the current question
         if state.has_retries_left():
-            # If so, increment the retry count. The graph will loop back to ask again.
+            # If so, increment the retry count and generate guidance-based message
             state.increment_retry()
-            return {"retry_count": state.retry_count}
+            
+            # Get current question for guidance message
+            current_question = question_manager.get_question_at_index(state.current_question_index)
+            if current_question:
+                # Get guidance from evaluation result
+                evaluation_result = state.evaluation_result or {}
+                guidance = evaluation_result.get("guidance", "Könnten Sie bitte etwas mehr Details angeben?")
+                
+                if guidance and guidance.strip():
+                    # Use guidance as the main message - it's already contextual and user-friendly
+                    bot_message = guidance
+                else:
+                    # Fallback if no guidance is available
+                    bot_message = f"Könnten Sie bitte etwas mehr Details angeben? {current_question.question}"
+                
+                return {
+                    "retry_count": state.retry_count,
+                    "last_bot_message": bot_message
+                }
+            else:
+                return {"retry_count": state.retry_count}
         else:
             # If no retries are left, advance to the next question to avoid getting stuck.
             state.advance_to_next_question()
+            
+            # Update current_question to the new question after advancing
+            if not state.is_complete:
+                current_question = question_manager.get_question_at_index(state.current_question_index)
+                if current_question:
+                    state.current_question = current_question.to_dict()
+            
             return {
                 "current_question_index": state.current_question_index,
                 "retry_count": state.retry_count,  # Will be 0 after advancing
@@ -204,13 +237,7 @@ def build_medical_graph():
                 "last_bot_message": "Ihre medizinische Anamnese ist vollständig. Es gab ein Problem bei der Zusammenfassungserstellung, aber Ihre Antworten wurden gespeichert."
             }
     
-    def check_completion(state: MedicalChatState) -> str:
-        """Check if all questions have been answered and route accordingly"""
-        if state.is_complete:
-            if state.needs_session_summary:
-                return "generate_session_summary"
-            return END
-        return "ask_question"
+
     
     # Define the workflow
     workflow = StateGraph(MedicalChatState)
@@ -222,9 +249,24 @@ def build_medical_graph():
     workflow.add_node("handle_insufficient_response", handle_insufficient_response)
     workflow.add_node("generate_session_summary", generate_session_summary)
 
+    def should_evaluate(state: MedicalChatState) -> str:
+        """Check if we should evaluate user input or just present question"""
+        # If this is the initial question presentation (no user input yet), just show question
+        if not state.user_input or not state.user_input.strip():
+            return END
+        # If we have user input, evaluate it
+        return "evaluate_response"
+    
     # Define edges
     workflow.set_entry_point("ask_question")
-    workflow.add_edge("ask_question", "evaluate_response")
+    workflow.add_conditional_edges(
+        "ask_question",
+        should_evaluate,
+        {
+            "evaluate_response": "evaluate_response",
+            END: END
+        }
+    )
     
     # Conditional routing after evaluation
     workflow.add_conditional_edges(
@@ -236,17 +278,9 @@ def build_medical_graph():
         }
     )
 
-    # Loop back or end after handling responses
-    workflow.add_conditional_edges(
-        "handle_sufficient_response",
-        check_completion,
-        {END: END, "ask_question": "ask_question", "generate_session_summary": "generate_session_summary"}
-    )
-    workflow.add_conditional_edges(
-        "handle_insufficient_response",
-        check_completion,
-        {END: END, "ask_question": "ask_question", "generate_session_summary": "generate_session_summary"}
-    )
+    # After handling responses, always end to stop the graph
+    workflow.add_edge("handle_sufficient_response", END)
+    workflow.add_edge("handle_insufficient_response", END)
     
     # End after generating session summary
     workflow.add_edge("generate_session_summary", END)

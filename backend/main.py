@@ -379,6 +379,19 @@ async def chat(request: Request):
             for key, value in result.items():
                 if hasattr(state, key):
                     setattr(state, key, value)
+            
+            # Clear user input after processing
+            state.user_input = ""
+            
+            # If answer was sufficient and we advanced, get the next question
+            if (state.evaluation_result and 
+                state.evaluation_result.get("is_sufficient", False) and 
+                not state.is_complete):
+                # Invoke graph again to get next question (no user input)
+                next_result = medical_graph.invoke(state, config=config)
+                for key, value in next_result.items():
+                    if hasattr(state, key):
+                        setattr(state, key, value)
         else:
             # Fallback if graph is not available
             logger.warning("Medical graph not available, using fallback response")
@@ -412,8 +425,17 @@ async def chat(request: Request):
                 except Exception as e:
                     logger.error(f"Failed to save answered question: {e}")
         
-        # Get the bot response
-        bot_message = state.last_bot_message or "Entschuldigung, es gab ein Problem. Könnten Sie das bitte wiederholen?"
+        # Get the bot response - check for retry with guidance first
+        if (state.evaluation_result and 
+            not state.evaluation_result.get("is_sufficient", False) and 
+            state.retry_count > 0 and 
+            state.evaluation_result.get("guidance")):
+            # For insufficient answers with guidance, use the guidance instead of the original question
+            guidance = state.evaluation_result.get("guidance")
+            bot_message = guidance if isinstance(guidance, str) else "Könnten Sie bitte etwas mehr Details angeben?"
+        else:
+            # Default bot message from graph or fallback
+            bot_message = state.last_bot_message or "Entschuldigung, es gab ein Problem. Könnten Sie das bitte wiederholen?"
         
         # Save bot message to database if available
         if db and state.session_id:

@@ -43,6 +43,7 @@ class MedicalChatState:
         self.current_question_index += 1
         self.retry_count = 0
         self.is_welcome_phase = False
+        self.user_input = ""  # Clear user input when advancing
         
         # Update current_question
         current = self.get_current_question()

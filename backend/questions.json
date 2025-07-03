@@ -22,17 +22,6 @@
     "required": true
   },
   {
-    "id": "symptom_duration",
-    "question": "How long have you been experiencing this symptom?",
-    "criteria": [
-      "Must include a time period (hours, days, weeks, months)",
-      "Must be specific (not vague terms like 'recently')",
-      "Should indicate if symptoms are constant or intermittent"
-    ],
-    "category": "history",
-    "required": true
-  },
-  {
     "id": "symptom_character",
     "question": "How would you describe your symptoms? Please be as specific as possible about what you're experiencing.",
     "criteria": [
