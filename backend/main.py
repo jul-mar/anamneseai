@@ -531,9 +531,17 @@ async def debug_continue(request: Request):
     # Configuration to continue the graph
     config: RunnableConfig = {"configurable": {"thread_id": session_id}}
 
-    # Trigger the next graph turn by invoking with no new messages
-    graph_response = medical_graph.invoke({"messages": []}, config=config)
-    session["messages"] = graph_response["messages"]
+    # Get the current state from sessions
+    if session_id in sessions:
+        state = sessions[session_id]
+        # Trigger the next graph turn with current state
+        if medical_graph is not None:
+            graph_response = medical_graph.invoke(state, config=config)
+            # Update state with result
+            for key, value in graph_response.items():
+                if hasattr(state, key):
+                    setattr(state, key, value)
+            sessions[session_id] = state
 
     response_data = {
         "chat_messages": _serialize_messages(session.get('messages', [])),
@@ -543,6 +551,78 @@ async def debug_continue(request: Request):
     response = JSONResponse(content=response_data)
     save_session(session, response)
     return response
+
+@app.get("/api/session/summary")
+async def get_session_summary(request: Request):
+    """Generate and return a comprehensive medical summary for the current session"""
+    session_id = get_session_from_request(request)
+    
+    if not session_id or not validate_session(session_id):
+        raise HTTPException(status_code=400, detail="Valid session required")
+    
+    # Get session state
+    if session_id not in sessions:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    state = sessions[session_id]
+    
+    # Check if session is complete
+    if not state.is_complete:
+        raise HTTPException(status_code=400, detail="Session must be completed before generating summary")
+    
+    try:
+        # Import summary generator
+        from backend.summary_generator import MedicalSummaryGenerator
+        from backend.models import MedicalChatbotConfig
+        
+        config = MedicalChatbotConfig()
+        summary_generator = MedicalSummaryGenerator(config)
+        
+        # Prepare session data for comprehensive summary
+        session_data = {
+            "answered_questions": [],
+            "conversation_history": state.conversation_history,
+            "session_metadata": {
+                "session_id": state.session_id,
+                "total_questions": len(state.questions),
+                "completed_questions": state.current_question_index,
+                "user_id": state.user_id
+            }
+        }
+        
+        # Add individual question summaries to session data
+        for question_index, summary_data in state.question_summaries.items():
+            session_data["answered_questions"].append(summary_data)
+        
+        # Generate comprehensive session summary
+        comprehensive_summary = await summary_generator.generate_session_summary(session_data)
+        
+        # Mark session as completed in database if available
+        if db and state.session_id:
+            safe_complete_session(state.session_id)
+            logger.info(f"Marked session {state.session_id} as completed")
+        
+        # Prepare response
+        response_data = {
+            "session_id": state.session_id,
+            "user_id": state.user_id,
+            "is_complete": state.is_complete,
+            "total_questions": len(state.questions),
+            "answered_questions_count": len(state.question_summaries),
+            "comprehensive_summary": comprehensive_summary,
+            "individual_summaries": list(state.question_summaries.values()),
+            "session_metadata": session_data["session_metadata"]
+        }
+        
+        response = JSONResponse(content=response_data)
+        set_session_cookie(response, session_id)
+        
+        logger.info(f"Generated comprehensive summary for session {session_id}")
+        return response
+        
+    except Exception as e:
+        logger.error(f"Failed to generate session summary for session {session_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate session summary")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000) 

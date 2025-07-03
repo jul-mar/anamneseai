@@ -55,9 +55,9 @@
   - [x] 4.6 Add comprehensive error handling for database operations in API layer
 
 - [ ] 5.0 Implement Medical Summary Generation and Session Completion
-  - [ ] 5.1 Create clinical summary generation function using OpenAI GPT-4o-mini
-  - [ ] 5.2 Implement per-question summary creation and storage
-  - [ ] 5.3 Build comprehensive medical history summary for completed sessions
-  - [ ] 5.4 Add session completion detection and final summary generation
+  - [x] 5.1 Create clinical summary generation function using OpenAI GPT-4o-mini
+  - [x] 5.2 Implement per-question summary creation and storage
+  - [x] 5.3 Build comprehensive medical history summary for completed sessions
+  - [x] 5.4 Add session completion detection and final summary generation
   - [ ] 5.5 Implement summary retrieval endpoints for healthcare providers
   - [ ] 5.6 Add session status tracking and completion timestamps 

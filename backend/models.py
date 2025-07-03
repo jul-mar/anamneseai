@@ -28,6 +28,9 @@ class MedicalChatState:
     conversation_history: List[Dict] = field(default_factory=list)
     is_complete: bool = False
     is_welcome_phase: bool = True  # True for initial welcome/first question
+    question_summaries: Dict[int, Dict] = field(default_factory=dict)  # Stores medical summaries indexed by question index
+    needs_session_summary: bool = False  # Flag to trigger comprehensive session summary generation
+    session_summary: Optional[Dict] = None  # Stores the comprehensive session summary
     
     def get_current_question(self) -> Optional[Dict]:
         """Get the current question object"""
