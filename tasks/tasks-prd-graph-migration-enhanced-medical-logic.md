@@ -46,13 +46,13 @@
   - [x] 3.6 Add graph flow management with proper state transitions
   - [x] 3.7 Preserve initial question flow ("What is reason for your consultation? Fever or Cough?")
 
-- [ ] 4.0 Integrate Database Persistence with API Endpoints
-  - [ ] 4.1 Update /api/session/start endpoint to create database sessions
-  - [ ] 4.2 Modify /api/chat endpoint to store all messages in conversation_history
-  - [ ] 4.3 Implement session tracking with unique session IDs
-  - [ ] 4.4 Add answer storage in answered_questions table with summaries
-  - [ ] 4.5 Ensure backward compatibility with existing frontend JSON response format
-  - [ ] 4.6 Add comprehensive error handling for database operations in API layer
+- [x] 4.0 Integrate Database Persistence with API Endpoints
+  - [x] 4.1 Update /api/session/start endpoint to create database sessions
+  - [x] 4.2 Modify /api/chat endpoint to store all messages in conversation_history
+  - [x] 4.3 Implement session tracking with unique session IDs
+  - [x] 4.4 Add answer storage in answered_questions table with summaries
+  - [x] 4.5 Ensure backward compatibility with existing frontend JSON response format
+  - [x] 4.6 Add comprehensive error handling for database operations in API layer
 
 - [ ] 5.0 Implement Medical Summary Generation and Session Completion
   - [ ] 5.1 Create clinical summary generation function using OpenAI GPT-4o-mini

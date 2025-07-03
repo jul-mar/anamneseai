@@ -7,33 +7,184 @@ import uvicorn
 import uuid
 from typing import List, Dict, Any, Union, Optional
 import logging
+import sqlite3
 
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from graph import anamnesis_graph, load_config
+from graph import build_medical_graph
 from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
 from langchain_core.runnables import RunnableConfig
 from database import MedicalHistoryDatabase
-from models import MedicalChatbotConfig
+from models import MedicalChatbotConfig, MedicalChatState
+from question_manager import QuestionManager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Global database instance
+# Global database and component instances
 db: Optional[MedicalHistoryDatabase] = None
+question_manager: Optional[QuestionManager] = None
+medical_graph = None
+
+def generate_session_id() -> str:
+    """Generate a unique session identifier"""
+    return str(uuid.uuid4())
+
+def get_session_from_request(request: Request) -> Optional[str]:
+    """Extract session ID from request cookies"""
+    return request.cookies.get("session_id")
+
+def validate_session(session_id: Optional[str]) -> bool:
+    """Validate if a session ID exists and is active"""
+    if not session_id:
+        return False
+    return session_id in sessions
+
+def get_or_create_session_state(session_id: str, user_id: str) -> MedicalChatState:
+    """Get existing session state or create a new one"""
+    if session_id in sessions:
+        return sessions[session_id]
+    
+    # Create new session state with safe database operation
+    db_session_id = safe_create_session(user_id)
+    if db_session_id:
+        logger.info(f"Created database session {db_session_id} for user {user_id}")
+    else:
+        logger.warning(f"Failed to create database session for user {user_id}, continuing without persistence")
+    
+    # Convert questions to dict format for state
+    questions_list = []
+    if question_manager:
+        questions_list = [q.to_dict() for q in question_manager.get_all_questions()]
+    
+    # Initialize the medical chat state
+    state = MedicalChatState(
+        user_id=user_id,
+        session_id=db_session_id,
+        questions=questions_list,
+        current_question_index=0,
+        is_welcome_phase=True,
+        max_retries=3
+    )
+    
+    # Get the first question
+    if question_manager:
+        first_question = question_manager.get_initial_question()
+        if first_question:
+            state.current_question = first_question.to_dict()
+    
+    # Store session state in memory
+    sessions[session_id] = state
+    return state
+
+def set_session_cookie(response: JSONResponse, session_id: str):
+    """Set session cookie on response"""
+    response.set_cookie(
+        key="session_id", 
+        value=session_id, 
+        httponly=True,
+        secure=False,  # Set to True in production with HTTPS
+        samesite="lax",
+        max_age=3600 * 24  # 24 hours
+    )
+
+def safe_db_operation(operation_name: str, db_operation, *args, **kwargs):
+    """
+    Safely execute a database operation with comprehensive error handling.
+    
+    Args:
+        operation_name: Description of the operation for logging
+        db_operation: The database function to call
+        *args, **kwargs: Arguments to pass to the database function
+    
+    Returns:
+        Result of the operation or None if it failed
+    """
+    if not db:
+        logger.warning(f"Database not available for operation: {operation_name}")
+        return None
+    
+    try:
+        result = db_operation(*args, **kwargs)
+        logger.debug(f"Database operation '{operation_name}' completed successfully")
+        return result
+    except sqlite3.Error as e:
+        logger.error(f"SQLite error during '{operation_name}': {e}")
+        return None
+    except Exception as e:
+        logger.error(f"Unexpected error during '{operation_name}': {e}")
+        return None
+
+def safe_create_session(user_id: str) -> Optional[int]:
+    """Safely create a database session with error handling"""
+    if not db:
+        logger.warning(f"Database not available for create_session for user {user_id}")
+        return None
+    return safe_db_operation(
+        f"create_session for user {user_id}",
+        db.create_session,
+        user_id
+    )
+
+def safe_save_conversation_message(session_id: int, role: str, message: str) -> bool:
+    """Safely save a conversation message with error handling"""
+    if not db:
+        logger.warning(f"Database not available for save_conversation_message for session {session_id}")
+        return False
+    result = safe_db_operation(
+        f"save_conversation_message for session {session_id}",
+        db.save_conversation_message,
+        session_id, role, message
+    )
+    return result is not None
+
+def safe_save_answered_question(session_id: int, question_id: str, question_text: str, 
+                               user_response: str, summary: str) -> bool:
+    """Safely save an answered question with error handling"""
+    if not db:
+        logger.warning(f"Database not available for save_answered_question for session {session_id}")
+        return False
+    result = safe_db_operation(
+        f"save_answered_question for session {session_id}",
+        db.save_answered_question,
+        session_id, question_id, question_text, user_response, summary
+    )
+    return result is not None
+
+def safe_complete_session(session_id: int) -> bool:
+    """Safely mark a session as complete with error handling"""
+    if not db:
+        logger.warning(f"Database not available for complete_session {session_id}")
+        return False
+    result = safe_db_operation(
+        f"complete_session {session_id}",
+        db.complete_session,
+        session_id
+    )
+    return result is not None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initialize database on startup and cleanup on shutdown"""
-    global db
+    """Initialize database and components on startup and cleanup on shutdown"""
+    global db, question_manager, medical_graph
     try:
-        # Initialize database on startup
-        logger.info("Initializing medical history database...")
+        # Initialize configuration and components
+        logger.info("Initializing medical history system...")
         config = MedicalChatbotConfig()
+        
+        # Initialize database
         db = MedicalHistoryDatabase(config.database_file)
         logger.info(f"Database initialized successfully at {config.database_file}")
+        
+        # Initialize question manager
+        question_manager = QuestionManager(config)
+        logger.info(f"Question manager initialized with {question_manager.get_total_questions()} questions")
+        
+        # Initialize medical graph
+        medical_graph = build_medical_graph()
+        logger.info("Medical conversation graph initialized")
         
         # Test database connection
         test_session_id = db.create_session("startup_test")
@@ -42,7 +193,7 @@ async def lifespan(app: FastAPI):
         yield
         
     except Exception as e:
-        logger.error(f"Failed to initialize database: {e}")
+        logger.error(f"Failed to initialize system: {e}")
         # Continue without database for fallback compatibility
         yield
     finally:
@@ -51,9 +202,9 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-# Global dictionary to store session data in memory
-# Key: session_id (str), Value: session_data (dict)
-sessions: Dict[str, Dict[str, Any]] = {}
+# Global dictionary to store session states in memory
+# Key: session_id (str), Value: MedicalChatState
+sessions: Dict[str, MedicalChatState] = {}
 
 # CORS (Cross-Origin Resource Sharing)
 # Allow requests from our frontend development server
@@ -92,95 +243,234 @@ def _determine_bot_state(messages: List[BaseMessage]) -> str:
 def get_session(request: Request) -> Dict[str, Any]:
     session_id = request.cookies.get("session_id")
     if session_id and session_id in sessions:
-        return sessions[session_id]
+        # Convert MedicalChatState to dict for backward compatibility
+        state = sessions[session_id]
+        return {
+            "session_id": session_id,
+            "messages": [],  # Will be populated from conversation history
+            "debug_mode_enabled": False,
+            "state": state
+        }
     # Create a new session if one doesn't exist
     new_session_id = str(uuid.uuid4())
-    sessions[new_session_id] = {
+    return {
         "session_id": new_session_id,
         "messages": [],
-        "debug_mode_enabled": False, # Disabled by default
+        "debug_mode_enabled": False,
     }
-    return sessions[new_session_id]
 
 def save_session(session: dict, response: JSONResponse):
     if "session_id" in session:
         session_id = session["session_id"]
-        sessions[session_id] = session
+        # For backward compatibility, only save if we have a state object
+        if "state" in session and isinstance(session["state"], MedicalChatState):
+            sessions[session_id] = session["state"]
         response.set_cookie(key="session_id", value=session_id, httponly=True)
 
 @app.post("/api/session/start")
 async def start_session(request: Request):
-    session = get_session(request)
-    session_id = session["session_id"]
+    """
+    Starts a new medical history session with database persistence.
+    """
+    # Generate a unique session identifier
+    session_id = generate_session_id()
+    user_id = f"user_{session_id[:8]}"  # Simple user ID based on session
     
-    # Configuration for the graph execution
-    config: RunnableConfig = {"configurable": {"thread_id": session_id}}
-
-    # If the session is new (no messages), start with welcome message and first question
-    if not session["messages"]:
-        # Add the welcome message first (same as old version)
-        from langchain_core.messages import AIMessage
-        welcome_message = AIMessage(content="Welcome to QuestionnAIre. I'm here to ask a few questions about your health before your appointment. Let's start.")
+    try:
+        # Get or create session state using helper function
+        state = get_or_create_session_state(session_id, user_id)
         
-        # Add the specific first question
-        first_question = AIMessage(content="What is reason for your consultation? Fever or Cough?")
+        # Invoke the graph to get the initial welcome message and first question
+        if medical_graph is not None:
+            config: RunnableConfig = {"configurable": {"thread_id": session_id}}
+            result = medical_graph.invoke(state, config=config)
+            
+            # Update state with graph result
+            for key, value in result.items():
+                if hasattr(state, key):
+                    setattr(state, key, value)
+        else:
+            # Fallback if graph is not available
+            logger.warning("Medical graph not available, using fallback welcome message")
+            state.last_bot_message = "Willkommen bei AnamneseAI! Ich bin Ihr medizinischer Assistent. Was ist der Grund für Ihre Konsultation? Fieber oder Husten?"
         
-        session["messages"] = [welcome_message, first_question]
-
-    # Load configuration to get the model name
-    config_data = load_config()
-    model_name = config_data.get("model_name", "N/A")
-
-    response_data = {
-        "chat_messages": _serialize_messages(session.get('messages', [])),
-        "debug_mode": session.get('debug_mode_enabled', False),
-        "model_name": model_name,
-        "bot_state": _determine_bot_state(session.get('messages', []))
-    }
-    response = JSONResponse(content=response_data)
-    save_session(session, response)
-    return response
+        # Save conversation messages to database if available
+        if state.session_id:
+            welcome_message = state.last_bot_message or "Willkommen bei AnamneseAI!"
+            if safe_save_conversation_message(state.session_id, "assistant", welcome_message):
+                logger.debug(f"Saved welcome message for session {state.session_id}")
+            else:
+                logger.warning(f"Failed to save welcome message for session {state.session_id}")
+        
+        # Prepare chat messages for frontend compatibility
+        chat_messages = []
+        if state.last_bot_message:
+            chat_messages.append({
+                "role": "assistant",
+                "content": state.last_bot_message
+            })
+        
+        # Prepare response with both old and new format fields for backward compatibility
+        response_data = {
+            # Old frontend-compatible format
+            "chat_messages": chat_messages,
+            "bot_state": "EXPECTING_USER_ANSWER",
+            "debug_mode": False,  # Default debug mode
+            "model_name": "gpt-4o-mini",  # From config
+            
+            # New enhanced format (for future frontend updates)
+            "session_id": session_id,
+            "message": state.last_bot_message or "Willkommen bei AnamneseAI!",
+            "question_index": state.current_question_index,
+            "total_questions": question_manager.get_total_questions() if question_manager else 0
+        }
+        
+        response = JSONResponse(content=response_data)
+        set_session_cookie(response, session_id)
+        
+        logger.info(f"Started new session {session_id} for user {user_id}")
+        return response
+        
+    except Exception as e:
+        logger.error(f"Failed to start session: {e}")
+        raise HTTPException(status_code=500, detail="Failed to initialize session")
 
 @app.post("/api/chat")
 async def chat(request: Request):
-    session = get_session(request)
-    session_id = session["session_id"]
-    if not session:
-        # This case should technically not be reached due to get_session creating one
-        raise HTTPException(status_code=400, detail="Session not started.")
+    """
+    Processes user messages and returns bot responses with database persistence.
+    """
+    # Get and validate session
+    session_id = get_session_from_request(request)
+    if not validate_session(session_id):
+        raise HTTPException(status_code=400, detail="Session not found. Please start a new session.")
 
-    data = await request.json()
-    user_message_content = data.get("message")
-
-    if not user_message_content:
-        raise HTTPException(status_code=422, detail="Message cannot be empty.")
-
-    # Configuration for the graph execution
-    config: RunnableConfig = {"configurable": {"thread_id": session_id}}
-
-    # Add the new user message to the session history
-    session["messages"].append(HumanMessage(content=user_message_content))
+    # Type assertion: session_id is guaranteed to be not None after validation
+    assert session_id is not None
     
-    # Determine whether the graph should pause
-    interrupt_before = "*" if session.get('debug_mode_enabled', False) else None
+    # Get the current state
+    state = sessions[session_id]
     
-    # Execute the graph. The graph receives the entire history.
-    graph_response = anamnesis_graph.invoke(
-        {"messages": session["messages"]},
-        config=config,
-        interrupt_before=interrupt_before
-    )
-    
-    # Add AI response to history
-    session["messages"] = graph_response["messages"]
+    try:
+        # Parse the user message
+        data = await request.json()
+        user_message = data.get("message", "").strip()
 
-    response_data = {
-        "chat_messages": _serialize_messages(session.get('messages', [])),
-        "bot_state": _determine_bot_state(session.get('messages', []))
-    }
-    response = JSONResponse(content=response_data)
-    save_session(session, response)
-    return response
+        if not user_message:
+            raise HTTPException(status_code=422, detail="Message cannot be empty.")
+
+        # Update state with user input
+        state.user_input = user_message
+        
+        # Save user message to database if available
+        if db and state.session_id:
+            db.save_conversation_message(state.session_id, "user", user_message)
+            logger.info(f"Saved user message to database for session {state.session_id}")
+        
+        # Add user message to conversation history in state
+        state.add_conversation_message("user", user_message)
+        
+        # Process through the medical graph
+        if medical_graph is not None:
+            config: RunnableConfig = {"configurable": {"thread_id": session_id}}
+            result = medical_graph.invoke(state, config=config)
+            
+            # Update state with graph result
+            for key, value in result.items():
+                if hasattr(state, key):
+                    setattr(state, key, value)
+        else:
+            # Fallback if graph is not available
+            logger.warning("Medical graph not available, using fallback response")
+            state.last_bot_message = "Entschuldigung, das System ist momentan nicht verfügbar. Bitte versuchen Sie es später erneut."
+        
+        # Check if answer was sufficient and save to answered_questions table
+        if (state.evaluation_result and 
+            state.evaluation_result.get("is_sufficient", False) and 
+            db and state.session_id):
+            
+            # Get the current question details
+            current_question = state.current_question
+            if current_question:
+                try:
+                    # Create a simple summary of the answer
+                    answer_summary = f"User response: {user_message[:100]}{'...' if len(user_message) > 100 else ''}"
+                    if state.evaluation_result.get("score"):
+                        answer_summary += f" (Score: {state.evaluation_result.get('score', 0):.2f})"
+                    
+                    # Save the answered question to database
+                    db.save_answered_question(
+                        session_id=state.session_id,
+                        question_id=current_question.get("id", "unknown"),
+                        question_text=current_question.get("question", ""),
+                        user_response=user_message,
+                        summary=answer_summary
+                    )
+                    
+                    logger.info(f"Saved answered question {current_question.get('id')} for session {state.session_id}")
+                    
+                except Exception as e:
+                    logger.error(f"Failed to save answered question: {e}")
+        
+        # Get the bot response
+        bot_message = state.last_bot_message or "Entschuldigung, es gab ein Problem. Könnten Sie das bitte wiederholen?"
+        
+        # Save bot message to database if available
+        if db and state.session_id:
+            db.save_conversation_message(state.session_id, "assistant", bot_message)
+            logger.info(f"Saved bot message to database for session {state.session_id}")
+        
+        # Add bot message to conversation history in state
+        state.add_conversation_message("assistant", bot_message)
+        
+        # Update the stored session
+        sessions[session_id] = state
+        
+        # Build chat_messages for frontend compatibility
+        chat_messages = []
+        for msg in state.conversation_history:
+            chat_messages.append({
+                "role": msg["role"],
+                "content": msg["message"]
+            })
+        
+        # Determine bot state for frontend
+        bot_state = "COMPLETE" if state.is_complete else "EXPECTING_USER_ANSWER"
+        
+        # Prepare response with both old and new format fields for backward compatibility
+        response_data = {
+            # Old frontend-compatible format
+            "chat_messages": chat_messages,
+            "bot_state": bot_state,
+            
+            # New enhanced format (for future frontend updates)
+            "message": bot_message,
+            "question_index": state.current_question_index,
+            "total_questions": len(state.questions),
+            "is_complete": state.is_complete,
+            "retry_count": state.retry_count,
+            "retries_remaining": state.retries_remaining()
+        }
+        
+        # Include evaluation feedback if available
+        if state.evaluation_result:
+            eval_dict = state.evaluation_result
+            response_data["evaluation"] = {
+                "is_sufficient": eval_dict.get("is_sufficient", False),
+                "score": eval_dict.get("score", 0.0),
+                "feedback": eval_dict.get("feedback", ""),
+                "guidance": eval_dict.get("guidance", "")
+            }
+        
+        response = JSONResponse(content=response_data)
+        set_session_cookie(response, session_id)
+        
+        logger.info(f"Processed message for session {session_id}")
+        return response
+        
+    except Exception as e:
+        logger.error(f"Chat processing failed for session {session_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to process message")
 
 @app.post("/api/session/restart")
 async def restart_session(request: Request):
@@ -242,7 +532,7 @@ async def debug_continue(request: Request):
     config: RunnableConfig = {"configurable": {"thread_id": session_id}}
 
     # Trigger the next graph turn by invoking with no new messages
-    graph_response = anamnesis_graph.invoke({"messages": []}, config=config)
+    graph_response = medical_graph.invoke({"messages": []}, config=config)
     session["messages"] = graph_response["messages"]
 
     response_data = {
