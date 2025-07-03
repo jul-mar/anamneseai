@@ -125,11 +125,16 @@ def build_medical_graph():
         # The state object's method encapsulates the logic for advancing.
         state.advance_to_next_question()
 
-        # Update current_question to the new question after advancing
+        # After advancing, get the new question and set it as the next bot message.
+        new_bot_message = ""
         if not state.is_complete:
+            # If we are not done, get the next question to ask.
             current_question = question_manager.get_question_at_index(state.current_question_index)
             if current_question:
                 state.current_question = current_question.to_dict()
+                new_bot_message = current_question.question
+        # If state.is_complete is True, the routing will handle sending it
+        # to the summary node, which provides its own completion message.
 
         # Return the updated fields to be merged back into the graph's state.
         return {
@@ -137,7 +142,8 @@ def build_medical_graph():
             "retry_count": state.retry_count,
             "is_complete": state.is_complete,
             "current_question": state.current_question,
-            "question_summaries": getattr(state, 'question_summaries', {})
+            "question_summaries": getattr(state, 'question_summaries', {}),
+            "last_bot_message": new_bot_message
         }
 
     def handle_insufficient_response(state: MedicalChatState) -> dict:
@@ -209,24 +215,36 @@ def build_medical_graph():
                 }
             }
             
+            summary_list = []
+            if state.question_summaries:
+                # Sort by question index to ensure correct order
+                sorted_summaries = sorted(state.question_summaries.items())
+                for index, summary_data in sorted_summaries:
+                    question_text = summary_data.get("question_text", "Unknown Question")
+                    # The summary from the generator is a dict, get the text from it
+                    summary_details = summary_data.get("summary", {})
+                    summary_text = summary_details.get("summary", "No summary available.")
+                    summary_list.append(f"{index + 1}. {question_text}: {summary_text}")
+
             # Add individual question summaries to session data
-            for question_index, summary_data in state.question_summaries.items():
+            for _, summary_data in state.question_summaries.items():
                 session_data["answered_questions"].append(summary_data)
             
             # Generate comprehensive session summary synchronously
             comprehensive_summary = summary_generator.generate_session_summary_sync(session_data)
             
-            if comprehensive_summary:
-                completion_message = "Your medical history is complete. A comprehensive clinical summary has been created and is available."
+            final_message = "Your medical history is complete. The summary could not be automatically created, but your answers have been saved."
+            if comprehensive_summary and summary_list:
+                formatted_summaries = "\n".join(summary_list)
+                final_message = f"Your medical history is complete. Here is a summary of your answers:\n\n{formatted_summaries}"
                 logger.info(f"Generated comprehensive session summary for session {state.session_id}")
             else:
-                completion_message = "Your medical history is complete. The summary could not be automatically created, but your answers have been saved."
                 logger.warning(f"Failed to generate session summary for session {state.session_id}")
             
             return {
                 "session_summary": comprehensive_summary,
                 "needs_session_summary": False,
-                "last_bot_message": completion_message
+                "last_bot_message": final_message
             }
             
         except Exception as e:
@@ -236,8 +254,15 @@ def build_medical_graph():
                 "needs_session_summary": False,
                 "last_bot_message": "Your medical history is complete. There was a problem creating the summary, but your answers have been saved."
             }
-    
 
+    def route_after_handling_response(state: MedicalChatState) -> str:
+        """Determines the next step after handling a sufficient response."""
+        if state.is_complete:
+            # If the questionnaire is complete, generate the final summary
+            return "generate_session_summary"
+        else:
+            # Otherwise, the graph flow ends for this turn
+            return END
     
     # Define the workflow
     workflow = StateGraph(MedicalChatState)
@@ -278,8 +303,17 @@ def build_medical_graph():
         }
     )
 
-    # After handling responses, always end to stop the graph
-    workflow.add_edge("handle_sufficient_response", END)
+    # After handling a sufficient response, decide whether to summarize or end
+    workflow.add_conditional_edges(
+        "handle_sufficient_response",
+        route_after_handling_response,
+        {
+            "generate_session_summary": "generate_session_summary",
+            END: END
+        }
+    )
+
+    # After handling an insufficient response, always end to await next user input
     workflow.add_edge("handle_insufficient_response", END)
     
     # End after generating session summary

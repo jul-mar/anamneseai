@@ -397,16 +397,6 @@ async def chat(request: Request):
             
             # Clear user input after processing
             state.user_input = ""
-            
-            # If answer was sufficient and we advanced, get the next question
-            if (state.evaluation_result and 
-                state.evaluation_result.get("is_sufficient", False) and 
-                not state.is_complete):
-                # Invoke graph again to get next question (no user input)
-                next_result = medical_graph.invoke(state, config=config)
-                for key, value in next_result.items():
-                    if hasattr(state, key):
-                        setattr(state, key, value)
         else:
             # Fallback if graph is not available
             logger.warning("Medical graph not available, using fallback response")
