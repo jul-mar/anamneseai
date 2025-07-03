@@ -32,15 +32,15 @@ def build_medical_graph():
         if not current_question:
             return {
                 "is_complete": True,
-                "last_bot_message": "Vielen Dank. Ihre medizinische Vorgeschichte wurde vollständig erfasst. Eine Zusammenfassung wird erstellt.",
+                "last_bot_message": "Thank you. Your medical history has been completely recorded. A summary is being created.",
                 "needs_session_summary": True
             }
 
         bot_message = ""
         # Handle the very first interaction (welcome message + first question)
         if state.is_welcome_phase:
-            welcome_message = "Willkommen bei AnamneseAI! Ich bin Ihr medizinischer Assistent. Um zu beginnen, beantworten Sie bitte die folgende Frage."
-            bot_message = f"{welcome_message}\\n\\n{current_question.question}"
+            welcome_message = "Welcome to QuestionnAIre! I am your medical assistant. To begin, please answer the following question."
+            bot_message = f"{welcome_message}\n\n{current_question.question}"
         # Handle retries - this should not happen as retries are handled in handle_insufficient_response
         elif state.retry_count > 0:
             # This is a fallback that should rarely be used
@@ -66,8 +66,8 @@ def build_medical_graph():
             return {"evaluation_result": {
                 "is_sufficient": False,
                 "score": 0.0,
-                "feedback": "Ein interner Fehler ist aufgetreten.",
-                "guidance": "Könnten Sie Ihre Antwort bitte wiederholen?",
+                "feedback": "An internal error occurred.",
+                "guidance": "Could you please repeat your answer?",
                 "evaluation_reasoning": "Missing user_input or current_question in state."
             }}
 
@@ -155,14 +155,14 @@ def build_medical_graph():
             if current_question:
                 # Get guidance from evaluation result
                 evaluation_result = state.evaluation_result or {}
-                guidance = evaluation_result.get("guidance", "Könnten Sie bitte etwas mehr Details angeben?")
+                guidance = evaluation_result.get("guidance", "Could you please provide more details?")
                 
                 if guidance and guidance.strip():
                     # Use guidance as the main message - it's already contextual and user-friendly
                     bot_message = guidance
                 else:
                     # Fallback if no guidance is available
-                    bot_message = f"Könnten Sie bitte etwas mehr Details angeben? {current_question.question}"
+                    bot_message = f"Could you please provide more details? {current_question.question}"
                 
                 return {
                     "retry_count": state.retry_count,
@@ -217,10 +217,10 @@ def build_medical_graph():
             comprehensive_summary = summary_generator.generate_session_summary_sync(session_data)
             
             if comprehensive_summary:
-                completion_message = "Ihre medizinische Anamnese ist vollständig. Eine umfassende klinische Zusammenfassung wurde erstellt und steht zur Verfügung."
+                completion_message = "Your medical history is complete. A comprehensive clinical summary has been created and is available."
                 logger.info(f"Generated comprehensive session summary for session {state.session_id}")
             else:
-                completion_message = "Ihre medizinische Anamnese ist vollständig. Die Zusammenfassung konnte nicht automatisch erstellt werden, aber Ihre Antworten wurden gespeichert."
+                completion_message = "Your medical history is complete. The summary could not be automatically created, but your answers have been saved."
                 logger.warning(f"Failed to generate session summary for session {state.session_id}")
             
             return {
@@ -234,7 +234,7 @@ def build_medical_graph():
             return {
                 "session_summary": None,
                 "needs_session_summary": False,
-                "last_bot_message": "Ihre medizinische Anamnese ist vollständig. Es gab ein Problem bei der Zusammenfassungserstellung, aber Ihre Antworten wurden gespeichert."
+                "last_bot_message": "Your medical history is complete. There was a problem creating the summary, but your answers have been saved."
             }
     
 

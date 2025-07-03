@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 db: Optional[MedicalHistoryDatabase] = None
 question_manager: Optional[QuestionManager] = None
 medical_graph = None
+current_config: Optional[MedicalChatbotConfig] = None
 
 def generate_session_id() -> str:
     """Generate a unique session identifier"""
@@ -168,11 +169,12 @@ def safe_complete_session(session_id: int) -> bool:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize database and components on startup and cleanup on shutdown"""
-    global db, question_manager, medical_graph
+    global db, question_manager, medical_graph, current_config
     try:
         # Initialize configuration and components
         logger.info("Initializing medical history system...")
         config = MedicalChatbotConfig()
+        current_config = config
         
         # Initialize database
         db = MedicalHistoryDatabase(config.database_file)
@@ -292,11 +294,11 @@ async def start_session(request: Request):
         else:
             # Fallback if graph is not available
             logger.warning("Medical graph not available, using fallback welcome message")
-            state.last_bot_message = "Willkommen bei AnamneseAI! Ich bin Ihr medizinischer Assistent. Was ist der Grund für Ihre Konsultation? Fieber oder Husten?"
+            state.last_bot_message = "Welcome to QuestionnAIre! I am your medical assistant. What is the reason for your consultation? Fever or cough?"
         
         # Save conversation messages to database if available
         if state.session_id:
-            welcome_message = state.last_bot_message or "Willkommen bei AnamneseAI!"
+            welcome_message = state.last_bot_message or "Welcome to QuestionnAIre!"
             if safe_save_conversation_message(state.session_id, "assistant", welcome_message):
                 logger.debug(f"Saved welcome message for session {state.session_id}")
             else:
@@ -320,7 +322,7 @@ async def start_session(request: Request):
             
             # New enhanced format (for future frontend updates)
             "session_id": session_id,
-            "message": state.last_bot_message or "Willkommen bei AnamneseAI!",
+            "message": state.last_bot_message or "Welcome to QuestionnAIre!",
             "question_index": state.current_question_index,
             "total_questions": question_manager.get_total_questions() if question_manager else 0
         }
@@ -395,7 +397,7 @@ async def chat(request: Request):
         else:
             # Fallback if graph is not available
             logger.warning("Medical graph not available, using fallback response")
-            state.last_bot_message = "Entschuldigung, das System ist momentan nicht verfügbar. Bitte versuchen Sie es später erneut."
+            state.last_bot_message = "Sorry, the system is currently unavailable. Please try again later."
         
         # Check if answer was sufficient and save to answered_questions table
         if (state.evaluation_result and 
@@ -432,10 +434,10 @@ async def chat(request: Request):
             state.evaluation_result.get("guidance")):
             # For insufficient answers with guidance, use the guidance instead of the original question
             guidance = state.evaluation_result.get("guidance")
-            bot_message = guidance if isinstance(guidance, str) else "Könnten Sie bitte etwas mehr Details angeben?"
+            bot_message = guidance if isinstance(guidance, str) else "Could you please provide more details?"
         else:
             # Default bot message from graph or fallback
-            bot_message = state.last_bot_message or "Entschuldigung, es gab ein Problem. Könnten Sie das bitte wiederholen?"
+            bot_message = state.last_bot_message or "Sorry, there was a problem. Could you please repeat that?"
         
         # Save bot message to database if available
         if db and state.session_id:
@@ -645,6 +647,71 @@ async def get_session_summary(request: Request):
     except Exception as e:
         logger.error(f"Failed to generate session summary for session {session_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to generate session summary")
+
+@app.post("/api/question-set/switch")
+async def switch_question_set(request: Request):
+    """Switch between different question sets (medical, smoking)"""
+    global question_manager, medical_graph, current_config
+    
+    try:
+        data = await request.json()
+        question_set = data.get("question_set", "medical")
+        
+        # Validate question set
+        valid_sets = ["medical", "smoking"]
+        if question_set not in valid_sets:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Invalid question set. Valid options: {valid_sets}"
+            )
+        
+        # Create new config with selected question set
+        from backend.models import MedicalChatbotConfig
+        config = MedicalChatbotConfig(question_set=question_set)
+        current_config = config  # Update global config
+        
+        # Reload question manager with new question set
+        question_manager = QuestionManager(config)
+        
+        # Rebuild medical graph with new question manager
+        medical_graph = build_medical_graph()
+        
+        logger.info(f"Switched to question set: {question_set}")
+        
+        response_data = {
+            "question_set": question_set,
+            "total_questions": question_manager.get_total_questions(),
+            "questions_file": config.get_questions_file(),
+            "message": f"Successfully switched to {question_set} question set"
+        }
+        
+        return JSONResponse(content=response_data)
+        
+    except Exception as e:
+        logger.error(f"Failed to switch question set: {e}")
+        raise HTTPException(status_code=500, detail="Failed to switch question set")
+
+@app.get("/api/question-set/current")
+async def get_current_question_set():
+    """Get information about the current question set"""
+    try:
+        # Use global config or create default
+        global current_config
+        from backend.models import MedicalChatbotConfig
+        config = current_config or MedicalChatbotConfig()
+        
+        response_data = {
+            "question_set": config.question_set,
+            "total_questions": question_manager.get_total_questions() if question_manager else 0,
+            "questions_file": config.get_questions_file(),
+            "available_sets": ["medical", "smoking"]
+        }
+        
+        return JSONResponse(content=response_data)
+        
+    except Exception as e:
+        logger.error(f"Failed to get current question set: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get question set information")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000) 

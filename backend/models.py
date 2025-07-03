@@ -10,6 +10,15 @@ class MedicalChatbotConfig:
     max_retries: int = 3
     questions_file: str = "backend/questions.json"
     database_file: str = "backend/medical_history.db"
+    question_set: str = "medical"  # Options: "medical", "smoking"
+    
+    def get_questions_file(self) -> str:
+        """Get the appropriate questions file based on question_set"""
+        question_files = {
+            "medical": "backend/questions.json",
+            "smoking": "backend/smoking_questions.json"
+        }
+        return question_files.get(self.question_set, self.questions_file)
 
 # Enhanced State Management for medical conversations
 @dataclass

@@ -19,10 +19,10 @@ class QuestionManager:
     def load_questions(self) -> bool:
         """Load questions from JSON file with validation criteria"""
         try:
-            questions_path = Path(self.config.questions_file)
+            questions_path = Path(self.config.get_questions_file())
             
             if not questions_path.exists():
-                logger.error(f"Questions file not found: {self.config.questions_file}")
+                logger.error(f"Questions file not found: {self.config.get_questions_file()}")
                 self._create_default_questions()
                 return False
             
@@ -52,7 +52,7 @@ class QuestionManager:
             self.questions = loaded_questions
             self._build_indexes()
             
-            logger.info(f"Successfully loaded {len(self.questions)} questions from {self.config.questions_file}")
+            logger.info(f"Successfully loaded {len(self.questions)} questions from {self.config.get_questions_file()}")
             return True
             
         except Exception as e:

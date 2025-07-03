@@ -1,0 +1,35 @@
+[
+  {
+    "id": "smoking_status",
+    "question": "Do you smoke?",
+    "criteria": [
+      "Must clearly state yes or no",
+      "Should specify current smoking status",
+      "Can include type of smoking (cigarettes, cigars, pipes, etc.)"
+    ],
+    "category": "lifestyle",
+    "required": true
+  },
+  {
+    "id": "smoking_quantity",
+    "question": "How much do you smoke?",
+    "criteria": [
+      "Must specify quantity (cigarettes per day, packs per week, etc.)",
+      "Should include frequency information",
+      "Must be specific numerical amount if smoker"
+    ],
+    "category": "lifestyle",
+    "required": true
+  },
+  {
+    "id": "smoking_duration",
+    "question": "Since when do you smoke?",
+    "criteria": [
+      "Must include time period (years, months, age when started)",
+      "Should provide specific timeframe",
+      "Can include context about when smoking began"
+    ],
+    "category": "lifestyle",
+    "required": true
+  }
+] 

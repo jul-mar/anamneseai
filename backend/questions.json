@@ -1,11 +1,11 @@
 [
   {
     "id": "chief_complaint",
-    "question": "Was ist der Grund für Ihre Konsultation? Fieber oder Husten?",
+    "question": "What is the reason for your consultation? Fever or cough?",
     "criteria": [
-      "Muss angeben, ob das Hauptsymptom Fieber oder Husten ist",
-      "Muss sich auf eines der beiden Symptome beziehen",
-      "Sollte klar und eindeutig sein"
+      "Must indicate whether the main symptom is fever or cough",
+      "Must refer to one of the two symptoms",
+      "Should be clear and unambiguous"
     ],
     "category": "primary",
     "required": true
