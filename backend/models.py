@@ -10,7 +10,7 @@ class MedicalChatbotConfig:
     max_retries: int = 3
     questions_file: str = "backend/questions.json"
     database_file: str = "backend/medical_history.db"
-    question_set: str = "medical"  # Options: "medical", "smoking"
+    question_set: str = "smoking"  # Options: "medical", "smoking"
     
     def get_questions_file(self) -> str:
         """Get the appropriate questions file based on question_set"""
