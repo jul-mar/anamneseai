@@ -20,6 +20,7 @@ class AnswerEvaluator:
         )
         self.json_parser = JsonOutputParser()
         self._setup_evaluation_prompt()
+        self._setup_guidance_prompt()
     
     def _setup_evaluation_prompt(self):
         """Setup the evaluation prompt template"""
@@ -63,6 +64,31 @@ Guidelines for scoring:
 Be understanding but ensure medical completeness.""")
         ])
     
+    def _setup_guidance_prompt(self):
+        """Setup the guidance generation prompt template"""
+        self.guidance_prompt = ChatPromptTemplate.from_messages([
+            ("system", """You are a friendly medical assistant chatbot. Your role is to provide helpful, clear, and encouraging guidance to patients when their answers are insufficient.
+
+Guidance Principles:
+- Be empathetic and supportive.
+- Do not be technical or use jargon.
+- Gently explain what information is missing.
+- Encourage the user to provide more details.
+- Keep it short and easy to understand (1-2 sentences).
+- Do not repeat the original question.
+- Do not sound robotic or demanding.
+
+Respond with a single guidance sentence, no extra text."""),
+            ("human", """The user was asked: "{question}"
+
+Their answer was: "{answer}"
+
+The answer was insufficient because it was missing information about these topics:
+{missing_criteria}
+
+Please provide a short, friendly guidance message to help the user give a better answer. For example, if they need to provide a timeline, you could say: 'Could you please tell me a bit more about when this started?'""")
+        ])
+    
     async def evaluate_answer(
         self, 
         question: MedicalQuestion, 
@@ -97,6 +123,14 @@ Be understanding but ensure medical completeness.""")
             
             # Parse and validate result
             evaluation = self._parse_evaluation_result(result, question, user_answer)
+            
+            # Generate guidance if answer is insufficient
+            if not evaluation.is_sufficient and evaluation.missing_criteria:
+                evaluation.guidance = await self.generate_guidance(
+                    question=question.question,
+                    answer=user_answer,
+                    missing_criteria=evaluation.missing_criteria
+                )
             
             logger.info(f"Evaluated answer for question {question.id}: score={evaluation.score}, sufficient={evaluation.is_sufficient}")
             return evaluation
@@ -231,6 +265,14 @@ Be understanding but ensure medical completeness.""")
             
             # Parse and validate result
             evaluation = self._parse_evaluation_result(result, question, user_answer)
+
+            # Generate guidance if answer is insufficient
+            if not evaluation.is_sufficient and evaluation.missing_criteria:
+                evaluation.guidance = self.generate_guidance_sync(
+                    question=question.question,
+                    answer=user_answer,
+                    missing_criteria=evaluation.missing_criteria
+                )
             
             logger.info(f"Evaluated answer for question {question.id}: score={evaluation.score}, sufficient={evaluation.is_sufficient}")
             return evaluation
@@ -238,6 +280,40 @@ Be understanding but ensure medical completeness.""")
         except Exception as e:
             logger.error(f"Answer evaluation failed for question {question.id}: {e}")
             return self._create_fallback_evaluation(question, user_answer, str(e))
+    
+    def generate_guidance_sync(
+        self,
+        question: str,
+        answer: str,
+        missing_criteria: List[str]
+    ) -> Optional[str]:
+        """Synchronous version of guidance generation"""
+        if not missing_criteria:
+            return None
+        
+        try:
+            guidance_chain = self.guidance_prompt | self.llm
+            
+            criteria_text = ", ".join(missing_criteria)
+            
+            response = guidance_chain.invoke({
+                "question": question,
+                "answer": answer,
+                "missing_criteria": criteria_text
+            })
+            
+            guidance = response.content
+            if isinstance(guidance, str):
+                guidance = guidance.strip()
+            else:
+                guidance = str(guidance)
+
+            logger.info(f"Generated sync guidance: {guidance}")
+            return guidance
+
+        except Exception as e:
+            logger.error(f"Failed to generate sync guidance: {e}")
+            return "Could you please provide a little more detail?" # Fallback guidance
     
     def batch_evaluate_answers(
         self, 
@@ -279,6 +355,40 @@ Be understanding but ensure medical completeness.""")
                 "poor": sum(1 for e in evaluations if e.score < 0.5)
             }
         }
+
+    async def generate_guidance(
+        self,
+        question: str,
+        answer: str,
+        missing_criteria: List[str]
+    ) -> Optional[str]:
+        """Generate helpful guidance for an insufficient answer"""
+        if not missing_criteria:
+            return None
+        
+        try:
+            guidance_chain = self.guidance_prompt | self.llm
+            
+            criteria_text = ", ".join(missing_criteria)
+            
+            response = await guidance_chain.ainvoke({
+                "question": question,
+                "answer": answer,
+                "missing_criteria": criteria_text
+            })
+            
+            guidance = response.content
+            if isinstance(guidance, str):
+                guidance = guidance.strip()
+            else:
+                guidance = str(guidance)
+
+            logger.info(f"Generated guidance: {guidance}")
+            return guidance
+
+        except Exception as e:
+            logger.error(f"Failed to generate guidance: {e}")
+            return "Could you please provide a little more detail?" # Fallback guidance
 
 # Convenience function for quick evaluation
 def evaluate_medical_answer(

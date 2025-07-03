@@ -1,37 +1,20 @@
 [project]
 name = "anamneseai"
 version = "0.1.0"
-description = "A medical chatbot for patient history taking"
-authors = [
-    { name = "Nolwenn Martens", email = "nolwenn.martens@posteo.de" }
-]
+description = "AI-powered medical history chatbot using QuestionnAIre"
+requires-python = ">=3.9"
 dependencies = [
     "fastapi",
-    "uvicorn",
-    "langchain",
-    "langgraph",
-    "langchain-community",
+    "uvicorn[standard]",
+    "python-dotenv",
+    "ollama",
+    "huggingface-hub",
+    "langchain==0.3.26",
+    "langgraph==0.5.0",
+    "langchain-huggingface",
     "langchain-openai",
     "openai",
-    "python-dotenv",
 ]
-requires-python = ">=3.10"
-readme = "README.md"
-license = { text = "MIT" }
-
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[tool.rye]
-managed = true
-dev-dependencies = []
-
-[tool.hatch.metadata]
-allow-direct-references = true
-
-[tool.hatch.build.targets.wheel]
-packages = ["backend"]
 
 [project.optional-dependencies]
 dev = [

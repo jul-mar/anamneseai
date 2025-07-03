@@ -179,23 +179,26 @@ class QuestionManager:
         """Get all required questions"""
         return [q for q in self.questions if q.required]
     
-    def get_question_by_index(self, index: int) -> Optional[MedicalQuestion]:
+    def get_question_at_index(self, index: int) -> Optional[MedicalQuestion]:
         """Get question at specific index"""
         if 0 <= index < len(self.questions):
             return self.questions[index]
         return None
     
-    def get_question_index(self, question_id: str) -> int:
-        """Get the index of a question by its ID."""
-        question = self.get_question_by_id(question_id)
-        if question:
-            return self.questions.index(question)
-        return -1
-    
     def get_total_questions(self) -> int:
         """Get total number of questions"""
         return len(self.questions)
     
+    def get_initial_question(self) -> Optional[MedicalQuestion]:
+        """Get the very first question in the list"""
+        if self.questions:
+            return self.questions[0]
+        return None
+
+    def is_last_question(self, index: int) -> bool:
+        """Check if the given index is for the last question"""
+        return index == len(self.questions) - 1
+
     def validate_questions_structure(self) -> Dict[str, Any]:
         """Validate the overall structure and consistency of loaded questions"""
         validation_result = {
